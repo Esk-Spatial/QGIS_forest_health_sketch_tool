@@ -23,10 +23,10 @@
 """
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QVariant
 from qgis.PyQt.QtGui import QIcon, QColor
-from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QPushButton, QVBoxLayout, QFileDialog, QDialog, QWidget, QHBoxLayout
+from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QPushButton, QVBoxLayout, QFileDialog, QDialog, QWidget, QHBoxLayout, QSpacerItem, QSizePolicy
 from qgis.core import QgsApplication, QgsFields, QgsCoordinateReferenceSystem, QgsVectorFileWriter, QgsWkbTypes, QgsVectorLayer, QgsProject, QgsRasterLayer, QgsPointXY, QgsCoordinateTransform, QgsRectangle, QgsField
 from datetime import datetime
-from helper import create_geopackage_file
+from helper import create_geopackage_file, split_array_to_chunks, adjust_color
 from qgis.core import QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer, QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis
 from PyQt5.QtWidgets import QWidgetAction, QToolButton
 
@@ -44,9 +44,6 @@ try:
     from osgeo import ogr
 except ImportError:
     import ogr
-
-fields_dicts = [{"name": "color", "ogr_type": ogr.OFTString, "width": 20},
-                {"name": "note", "ogr_type": ogr.OFTString, "width": 150}]
 
 _plugin_name_ = "app_tester"
 _plugin_directory_ = os.path.dirname(__file__)
@@ -69,7 +66,7 @@ def apply_symbology(layer, iface):
     layer.setRenderer(renderer)
 
     label_settings = QgsPalLayerSettings()
-    label_settings.fieldName = "label"
+    label_settings.fieldName = "Code"
     label_settings.enabled = True
     layer.setLabeling(QgsVectorLayerSimpleLabeling(label_settings))
 
@@ -98,8 +95,10 @@ class DigitalSketchMappingTool:
         self.point_layer = None
         self.line_layer = None
         self.polygon_layer = None
+        self.notes_layer = None
         self.plugin_name = _plugin_name_
         self.keypad_manager = KeypadManager()
+        self.pressed_btn = None
 
         self.bing_maps_url = (
             "https://t0.tiles.virtualearth.net/tiles/a{q}.jpeg?g=685&mkt=en-us&n=z"
@@ -316,68 +315,18 @@ class DigitalSketchMappingTool:
         categories = self.keypad_manager.get_selected_categories()
         attr_box = self.digital_sketch_widget.categoryAttrVerticalLayout
         if attr_box is not None:
-            QgsApplication.messageLog().logMessage(f'Need to remove elements.', 'DigitalSketchPlugin')
+            QgsApplication.messageLog().logMessage('Need to remove elements.', 'DigitalSketchPlugin')
 
         for cat in categories:
-            widget = QWidget()
-            layout = QHBoxLayout()
-            for item in cat.items:
-                btn = QPushButton(item)
-                btn.setMinimumHeight(30)
-                btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {cat.colour};
-                    color: white;
-                    font: bold 11px;
-                    border-radius: 5px;
-                    padding: 5px 10px;
-                    min-height: 30px;
-                }}
-                QPushButton:hover {{
-                    background-color: lighten({cat.colour}, 20%);
-                }}
-                QPushButton:pressed {{
-                    background-color: red !important;
-                    border-style: inset;
-                }}
-                """)
-                layout.addWidget(btn)
-                btn.clicked.connect(lambda checked, btn_name=item: self.__button_clicked(btn_name))
-                layout.setContentsMargins(2, 2, 2, 2)
-                layout.setSpacing(5)
+            QgsApplication.messageLog().logMessage(f'colour: {cat.colour}', 'DigitalSketchPlugin')
+            if len(cat.items) > 3:
+                QgsApplication.messageLog().logMessage("items greater than 3", 'DigitalSketchPlugin')
+                chunks = split_array_to_chunks(cat.items)
+                for chunk in chunks:
+                    attr_box.addWidget(self.__populate_buttons_from_list(chunk, cat.colour))
 
-            widget.setLayout(layout)
-            attr_box.addWidget(widget)
-
-    def __set_populate_buttons(self):
-        selected_items = self.digital_sketch_widget.mComboBox.checkedItems()
-        QgsApplication.messageLog().logMessage(f'selected_items {selected_items}.', 'DigitalSketchPlugin')
-        attr_box_ = self.digital_sketch_widget.selectedAttributesLayout
-
-        QgsApplication.messageLog().logMessage(f'attr_box . {attr_box_}', 'DigitalSketchPlugin')
-
-        for item in selected_items:
-            QgsApplication.messageLog().logMessage(f'item: {item}.', 'DigitalSketchPlugin')
-            button_name = f"btn_{item.lower().replace(' ', '_')}"
-            existing_button = attr_box_.findChild(QPushButton, item)
-
-            button = QPushButton(item)
-            QgsApplication.messageLog().logMessage('adding a new button', 'DigitalSketchPlugin')
-            button.setStyleSheet(f"""
-                    QPushButton {{
-                        background-color: red;
-                        color: white;
-                        border: 1px solid black;
-                        padding: 5px;
-                        border-radius: 4px;
-                    }}
-                    QPushButton:hover {{
-                        background-color: lighten(red, 20%);
-                    }}
-                """)
-            button.setObjectName(button_name)
-            attr_box_.addWidget(button)
-            button.clicked.connect(lambda checked, btn_name=item: self.__button_clicked(btn_name))
+            else:
+                attr_box.addWidget(self.__populate_buttons_from_list(cat.items, cat.colour))
 
     # --------------------------------------------------------------------------
 
@@ -409,6 +358,7 @@ class DigitalSketchMappingTool:
     def setup_digitizing(self, layer, layer_type):
         """Setup digitizing mode with automated attribute handling"""
         # Make layer active and editable
+        self.__check_for_current_selection(layer_type)
         self.iface.setActiveLayer(layer)
         layer.startEditing()
 
@@ -480,6 +430,8 @@ class DigitalSketchMappingTool:
         self.digitizing_tool = StreamDigitizingTool(self.iface, layer, layer_type)
         self.iface.mapCanvas().setMapTool(self.digitizing_tool)
 
+    # --------------------------------------------------------------------------
+
     def enable_stream_digitize(self):
         toolbar = self.iface.digitizeToolBar()
         QgsApplication.messageLog().logMessage(f"Toolbar found: {toolbar.objectName()}", 'DigitalSketchPlugin')
@@ -527,11 +479,12 @@ class DigitalSketchMappingTool:
         feature = layer.getFeature(fid)
 
         feature.setAttribute('colour', self.selected_colour)
-        feature.setAttribute('label', f"Feature_{fid} {self.feature_string}")
+        feature.setAttribute('Code', f"Feature_{fid} {self.feature_string}")
 
         # Update the feature
         layer.updateFeature(feature)
         apply_symbology(layer, self.iface)
+
 
     # --------------------------------------------------------------------------
 
@@ -550,6 +503,7 @@ class DigitalSketchMappingTool:
         self.point_layer = QgsVectorLayer(f"{shape_file_path}|layername=points", "points", "ogr")
         self.line_layer = QgsVectorLayer(f"{shape_file_path}|layername=lines", "lines", "ogr")
         self.polygon_layer = QgsVectorLayer(f"{shape_file_path}|layername=polygons", "polygons", "ogr")
+        self.notes_layer = QgsVectorLayer(f"{shape_file_path}|layername=lines", "notes", "ogr")
 
         self.point_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "plugin_style.qml"))
         self.polygon_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "plugin_style.qml"))
@@ -558,6 +512,7 @@ class DigitalSketchMappingTool:
         QgsProject.instance().addMapLayer(self.point_layer)
         QgsProject.instance().addMapLayer(self.line_layer)
         QgsProject.instance().addMapLayer(self.polygon_layer)
+        QgsProject.instance().addMapLayer(self.notes_layer)
 
         self.canvas.refresh()
 
@@ -571,6 +526,64 @@ class DigitalSketchMappingTool:
             self.digital_sketch_widget.setFolderPushButton.setVisible(True)
 
     #--------------------------------------------------------------------------
+
+    def __check_for_current_selection(self, selection):
+        if self.pressed_btn is not None:
+            QgsApplication.messageLog().logMessage(f"btn already pressed {self.pressed_btn}", 'DigitalSketchPlugin')
+            self.save_layers()
+
+            if self.pressed_btn == 'line':
+                self.digital_sketch_widget.linePushButton.setChecked(False)
+            elif self.pressed_btn == 'point':
+                self.digital_sketch_widget.pointPushButton.setChecked(False)
+            elif self.pressed_btn == 'polygon':
+                self.digital_sketch_widget.polygonPushButton.setChecked(False)
+
+        self.pressed_btn = selection
+
+    # --------------------------------------------------------------------------
+
+    def __populate_buttons_from_list(self, items, colour):
+        layout = QHBoxLayout()
+        widget = QWidget()
+        item_count = len(items)
+        light_colour = adjust_color(colour, 30)
+        dark_colour = adjust_color(colour, -15)
+        QgsApplication.messageLog().logMessage(f"colour: {colour}, light: {light_colour}, dark: {dark_colour}", 'DigitalSketchPlugin')
+        for item in items:
+            btn = QPushButton(item)
+            btn.setMinimumHeight(30)
+            btn.setCheckable(True)
+            btn.setStyleSheet(f"""
+                            QPushButton {{
+                                background-color: {colour};
+                                color: black;
+                                font: bold 11px;
+                                border-radius: 5px;
+                                padding: 5px 5x;
+                            }}
+                            QPushButton:hover {{
+                                background-color: {light_colour};
+                            }}
+                            QPushButton:checked {{
+                                border: 2px dotted black;
+                                background-color: {dark_colour} !important;
+                            }}
+                            """)
+            layout.addWidget(btn)
+            btn.clicked.connect(lambda checked, btn_name=item: self.__button_clicked(btn_name))
+            layout.setContentsMargins(2, 2, 2, 2)
+            layout.setSpacing(5)
+
+        # if item_count < 3:
+        #     QgsApplication.messageLog().logMessage("Setting item_cefefeount space l121alala", 'DigitalSketchPlugin')
+        #     # layout.addItem(QSpacerItem(40, 30, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        #     layout.insertStretch(-1,100)
+
+        widget.setLayout(layout)
+        return widget
+
+    # --------------------------------------------------------------------------
 
     def onClosePlugin(self):
         """Cleanup necessary items here when plugin dockwidget is closed"""
@@ -621,5 +634,5 @@ class DigitalSketchMappingTool:
 
             # show the dockwidget
             # TODO: fix to allow choice of dock location
-            self.iface.addDockWidget(Qt.BottomDockWidgetArea, self.digital_sketch_widget)
+            self.iface.addDockWidget(Qt.RightDockWidgetArea, self.digital_sketch_widget)
             self.digital_sketch_widget.show()

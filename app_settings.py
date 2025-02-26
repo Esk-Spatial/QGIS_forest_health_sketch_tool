@@ -148,7 +148,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
                 label = QLabel(element)
                 label.setMinimumSize(50, 30)
 
-                space = space = QSpacerItem(40, 30, QSizePolicy.Expanding, QSizePolicy.Minimum)
+                space = QSpacerItem(40, 30, QSizePolicy.Expanding, QSizePolicy.Minimum)
 
                 # edit Button (QPushButton)
                 edit_button = QPushButton('Edit')

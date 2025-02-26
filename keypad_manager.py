@@ -1,17 +1,18 @@
 import copy
 
 _initial_data_ = [
-    {"category": "BMAD", "selected": False, "colour": "#C8B5F4", "items": ["Discolour", "BMAD_L", "BMAD_M", "BMAD_H", "Stags", "Other"]},
-    {"category": "DEAD", "selected": True, "colour": "#C4BDCF", "items": ["D-tr_", "D-to_", "D-ti_", "D-tr-to_"]},
-    {"category": "EUCS", "selected": False, "colour": "#EBF1BD", "items": ["Ecde_", "Defe_", "Dvev_"]},
-    {"category": "NEEDLES", "selected": True, "colour": "#C3C4B4", "items": ["Dothi_", "Essi_", "Yelo_", "Brown_"]},
-    {"category": "CLIMATE", "selected": False, "colour": "#B2D9FD", "items": ["Frost_", "Fire_", "Snow_", "wind_", "L_", "Hail_"]},
-    {"category": "NUT-DEF", "selected": False, "colour": "#E7E4F3", "items": ["CXdedf_"]},
-    {"category": "WEEDS", "selected": False, "colour": "#D3C7D8", "items": ["Weeds_"]},
-    {"category": "POSSUM", "selected": False, "colour": "#DBD5D9", "items": ["Poss_"]},
-    {"category": "SPH", "selected": False, "colour": "#C6C3CC", "items": ["SPH_"]},
-    {"category": "INCIDENCE", "selected": False, "colour": "#D5E1BD", "items": ["_Sirex"]},
-    {"category": "SEVERITY", "selected": False, "colour": "#B6CDEC", "items": ["_Drought_", "_Root-H2O", "_Cyc", "_Essi"]}
+  {"category": "BMAD", "selected": False, "colour": "#FFC0CB", "items": ["Discolour", "BMAD_L", "BMAD_M", "BMAD_H", "Stags", "Other"]},
+  {"category": "CLIMATE", "selected": False, "colour": "#808080", "items": ["Frost_", "Fire_", "Snow_", "Wind_", "L_", "Hail_"]},
+  {"category": "DEAD", "selected": False, "colour": "#FF0000", "items": ["D-tr_", "D-to_", "D-ti_", "D-tr-to-ti_"]},
+  {"category": "EUCS", "selected": False, "colour": "#00FF00", "items": ["Creiis_", "Discolour_", "Defol_", "KLD_", "MLD_", "BMAD_", "QSB_", "WinterBB_"]},
+  {"category": "GROUND", "selected": False, "colour": "#FFFFFF", "items": ["_Sirex", "_Drought", "_Root-H2O", "_Cyc", "_Essi", "_Herb", "_Etops", "_Yel-Tops"]},
+  {"category": "INCIDENCE", "selected": False, "colour": "#FFFFE0", "items": ["1-5%", "5-15%", "15-30%", "30-45%", "45-75%", ">75%"]},
+  {"category": "NEEDLES", "selected": False, "colour": "#FFFF00", "items": ["Dothi_", "Essi_", "Yelo_", "Brown_"]},
+  {"category": "NUT-DEF", "selected": False, "colour": "#FFC0CB", "items": ["B-def_", "Mg-K-def_", "Nut-def_", "N-def"]},
+  {"category": "POSSUM", "selected": False, "colour": "#FFA500", "items": ["Poss_"]},
+  {"category": "SEVERITY", "selected": False, "colour": "#ADD8E6", "items": ["Low", "Moderate", "High", "Extreme"]},
+  {"category": "SPH", "selected": False, "colour": "#D3D3D3", "items": ["SPH_"]},
+  {"category": "WEEDS", "selected": False, "colour": "#006400", "items": ["Weeds_"]}
 ]
 
 class Keypad:
