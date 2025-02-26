@@ -84,7 +84,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
     def _clear_and_populate_categories(self):
         self.categoryListWidget.clear()
-        for pad in self.keypad_manager.data:
+        for pad in self.keypad_manager.data_cpy:
             QgsApplication.messageLog().logMessage(f"pad_item: {pad.category}", 'DigitalSketchPlugin')
             item = QListWidgetItem(self.categoryListWidget)
             widget = QWidget()
@@ -138,7 +138,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
     def _clear_populate_elements_list(self, category_name):
         self.elementListWidget.clear()
-        category = next((cat for cat in self.keypad_manager.data if cat.category == category_name), None)
+        category = next((cat for cat in self.keypad_manager.data_cpy if cat.category == category_name), None)
         if category:
             for element in category.items:
                 QgsApplication.messageLog().logMessage(f"pad_item: {element}", 'DigitalSketchPlugin')

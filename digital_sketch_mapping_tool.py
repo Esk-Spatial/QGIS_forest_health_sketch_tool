@@ -259,6 +259,8 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.polygonPushButton.clicked.connect(
             lambda: self.setup_digitizing(self.polygon_layer, 'polygon'))
 
+        self.digital_sketch_widget.notesPushButton.clicked.connect(lambda: self.setup_digitizing(self.notes_layer, 'notes'))
+
     # --------------------------------------------------------------------------
 
     def __load_bing_maps(self):
@@ -306,7 +308,7 @@ class DigitalSketchMappingTool:
         if folder:
             self.folder_location = folder
             self.__load_bing_maps()
-            self.__create_gpkg_file()
+            self.__create_geopackage_file()
             self.__zoom_to_location()
 
     # --------------------------------------------------------------------------
@@ -314,8 +316,12 @@ class DigitalSketchMappingTool:
     def __populate_categories(self):
         categories = self.keypad_manager.get_selected_categories()
         attr_box = self.digital_sketch_widget.categoryAttrVerticalLayout
-        if attr_box is not None:
-            QgsApplication.messageLog().logMessage('Need to remove elements.', 'DigitalSketchPlugin')
+        if not attr_box.isEmpty():
+            QgsApplication.messageLog().logMessage('Need to remove', 'DigitalSketchPlugin')
+            while attr_box.count():
+                QgsApplication.messageLog().logMessage("looping and deleting", 'DigitalSketchPlugin')
+                item = attr_box.takeAt(0)
+                attr_box.removeWidget(item.widget())
 
         for cat in categories:
             QgsApplication.messageLog().logMessage(f'colour: {cat.colour}', 'DigitalSketchPlugin')
@@ -365,7 +371,6 @@ class DigitalSketchMappingTool:
         if layer_type == 'line':
             QgsApplication.messageLog().logMessage("line layer", 'DigitalSketchPlugin')
             self.enable_feature_create("Add Line Feature")
-            # self.enable_stream_digitize()
             self.setup_stream_digitizing(layer, layer_type)
 
         elif layer_type == 'point':
@@ -375,11 +380,15 @@ class DigitalSketchMappingTool:
         elif layer_type == 'polygon':
             QgsApplication.messageLog().logMessage("polygon layer", 'DigitalSketchPlugin')
             self.enable_feature_create("Add Polygon Feature")
-            # self.enable_stream_digitize()
+            self.setup_stream_digitizing(layer, layer_type)
+
+        elif layer_type == 'notes':
+            QgsApplication.messageLog().logMessage("line layer", 'DigitalSketchPlugin')
+            self.enable_feature_create("Add Line Feature")
             self.setup_stream_digitizing(layer, layer_type)
 
         # Connect to feature added signal
-        layer.featureAdded.connect(lambda fid: self.populate_attributes(fid, layer))
+        layer.featureAdded.connect(lambda fid: self.populate_attributes(fid, layer, layer_type))
 
     # --------------------------------------------------------------------------
 
@@ -390,14 +399,18 @@ class DigitalSketchMappingTool:
             self.iface.messageBar().pushMessage("Success", "Changes committed successfully to point layer!",
                                                 level=Qgis.Success)
 
-        if self.line_layer:
+        if self.line_layer.isEditable():
             self.line_layer.commitChanges()  # Save the changes
             self.iface.messageBar().pushMessage("Success", "Changes committed successfully to line layer!",
                                                 level=Qgis.Success)
 
-        if self.polygon_layer:
+        if self.polygon_layer.isEditable():
             self.polygon_layer.commitChanges()  # Save the changes
             self.iface.messageBar().pushMessage("Success", "Changes committed successfully to polygon layer!",
+                                                level=Qgis.Success)
+        if self.notes_layer.isEditable():
+            self.notes_layer.commitChanges()  # Save the changes
+            self.iface.messageBar().pushMessage("Success", "Changes committed successfully to notes layer!",
                                                 level=Qgis.Success)
 
     # --------------------------------------------------------------------------
@@ -474,12 +487,17 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def populate_attributes(self, fid, layer):
+    def populate_attributes(self, fid, layer, layer_type):
         """Automatically populate attributes for new features"""
         feature = layer.getFeature(fid)
 
-        feature.setAttribute('colour', self.selected_colour)
-        feature.setAttribute('Code', f"Feature_{fid} {self.feature_string}")
+        if layer_type == 'note':
+            feature.setAttribute('colour', "#FF0000")
+            feature.setAttribute('Code', "")
+
+        else:
+            feature.setAttribute('colour', self.selected_colour)
+            feature.setAttribute('Code', f"Feature_{fid} {self.feature_string}")
 
         # Update the feature
         layer.updateFeature(feature)
@@ -488,8 +506,8 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def __create_gpkg_file(self):
-        QgsApplication.messageLog().logMessage('creating new shape file', 'DigitalSketchPlugin')
+    def __create_geopackage_file(self):
+        QgsApplication.messageLog().logMessage('creating new gpkg file', 'DigitalSketchPlugin')
         date_time_str = datetime.now().strftime("%d-%m-%Y_%I-%M-%p")
         shape_file_name = f"{date_time_str}.gpkg"
         shape_file_path = os.path.join(self.folder_location, shape_file_name)
@@ -538,6 +556,8 @@ class DigitalSketchMappingTool:
                 self.digital_sketch_widget.pointPushButton.setChecked(False)
             elif self.pressed_btn == 'polygon':
                 self.digital_sketch_widget.polygonPushButton.setChecked(False)
+            elif self.pressed_btn == 'notes':
+                self.digital_sketch_widget.notesPushButton.setChecked(False)
 
         self.pressed_btn = selection
 
