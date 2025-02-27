@@ -31,6 +31,7 @@ from qgis.core import QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory
 from PyQt5.QtWidgets import QWidgetAction, QToolButton
 
 from stream_digitizing_tool import StreamDigitizingTool
+from multi_line_tool import MultiLineDigitizingTool
 from .app_settings import AppSettingsDialog
 from keypad_manager import KeypadManager
 
@@ -385,7 +386,7 @@ class DigitalSketchMappingTool:
         elif layer_type == 'notes':
             QgsApplication.messageLog().logMessage("line layer", 'DigitalSketchPlugin')
             self.enable_feature_create("Add Line Feature")
-            self.setup_stream_digitizing(layer, layer_type)
+            self.setup_stream_digitizing(layer, 'line', True)
 
         # Connect to feature added signal
         layer.featureAdded.connect(lambda fid: self.populate_attributes(fid, layer, layer_type))
@@ -428,19 +429,25 @@ class DigitalSketchMappingTool:
         toolbar = self.iface.digitizeToolBar()
         QgsApplication.messageLog().logMessage(f"Toolbar found: {toolbar.objectName()}", 'DigitalSketchPlugin')
 
-        for action in toolbar.actions():
-            action_text = action.text() if action.text() else "[No Text]"
-            if action_text == action_name:
-                action.trigger()
+        # for action in toolbar.actions():
+        #     action_text = action.text() if action.text() else "[No Text]"
+        #     if action_text == action_name:
+        #         action.trigger()
 
     # --------------------------------------------------------------------------
 
-    def setup_stream_digitizing(self, layer, layer_type):
+    def setup_stream_digitizing(self, layer, layer_type, is_multipart=False):
         """Setup digitizing mode using stylus events"""
         self.iface.setActiveLayer(layer)
         layer.startEditing()
 
-        self.digitizing_tool = StreamDigitizingTool(self.iface, layer, layer_type)
+        if is_multipart:
+            QgsApplication.messageLog().logMessage("multipart", 'DigitalSketchPlugin')
+            self.digitizing_tool = MultiLineDigitizingTool(self.iface, layer)
+        else:
+            QgsApplication.messageLog().logMessage("single ", 'DigitalSketchPlugin')
+            self.digitizing_tool = StreamDigitizingTool(self.iface, layer, layer_type, is_multipart)
+
         self.iface.mapCanvas().setMapTool(self.digitizing_tool)
 
     # --------------------------------------------------------------------------
@@ -491,6 +498,7 @@ class DigitalSketchMappingTool:
         """Automatically populate attributes for new features"""
         feature = layer.getFeature(fid)
 
+
         if layer_type == 'note':
             feature.setAttribute('colour', "#FF0000")
             feature.setAttribute('Code', "")
@@ -503,6 +511,12 @@ class DigitalSketchMappingTool:
         layer.updateFeature(feature)
         apply_symbology(layer, self.iface)
 
+        if layer.isEditable():
+            QgsApplication.messageLog().logMessage('layer is editable', 'DigitalSketchPlugin')
+            # layer.commitChanges()
+            # layer.startEditing()
+
+        QgsApplication.messageLog().logMessage('finished updating symbology', 'DigitalSketchPlugin')
 
     # --------------------------------------------------------------------------
 

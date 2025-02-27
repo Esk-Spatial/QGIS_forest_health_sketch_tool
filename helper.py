@@ -1,4 +1,4 @@
-import os
+import datetime
 
 try:
     from osgeo import ogr
@@ -32,7 +32,7 @@ def create_geopackage_file(path, crs=None):
     point_layer = gpkg_file.CreateLayer('points', srs=spatial_ref, geom_type=ogr.wkbPoint)
     polygon_layer = gpkg_file.CreateLayer('polygons', srs=spatial_ref, geom_type=ogr.wkbPolygon)
     line_layer = gpkg_file.CreateLayer('lines', srs=spatial_ref, geom_type=ogr.wkbLineString)
-    notes_layer = gpkg_file.CreateLayer('lines', srs=spatial_ref, geom_type=ogr.wkbLineString)
+    notes_layer = gpkg_file.CreateLayer('notes', srs=spatial_ref, geom_type=ogr.wkbMultiLineString)
 
     for layer in [point_layer, polygon_layer, line_layer, notes_layer]:
         setup_layer_attr(layer)
@@ -46,7 +46,12 @@ def create_geopackage_file(path, crs=None):
 def setup_layer_attr(layer):
     # creating new fields
     layer.CreateField(ogr.FieldDefn("colour", ogr.OFTString))
+    layer.CreateField(ogr.FieldDefn("Shape", ogr.OFTString))
     layer.CreateField(ogr.FieldDefn("Code", ogr.OFTString))
+    layer.CreateField(ogr.FieldDefn("LAT", ogr.OFSTFloat32))
+    layer.CreateField(ogr.FieldDefn("LON", ogr.OFSTFloat32))
+    layer.CreateField(ogr.FieldDefn("Date", ogr.OFTString))
+    layer.CreateField(ogr.FieldDefn("Time", ogr.OFTString))
 
 def get_closest_color_name(self, color):
     """Find the closest color name from predefined QColor names"""
@@ -86,3 +91,9 @@ def adjust_color(hex_color, percent=30):
     b = min(255, max(0, int(b + (255 - b) * factor if factor > 0 else b * (1 + factor))))
 
     return f"#{r:02X}{g:02X}{b:02X}"
+
+def get_current_date():
+    return datetime.datetime.now().strftime('%x')
+
+def get_current_time():
+    return datetime.datetime.now().strftime('%X')
