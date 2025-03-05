@@ -26,7 +26,7 @@ from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QPushButton, QVBoxLayout, QFileDialog, QDialog, QWidget, QHBoxLayout, QSpacerItem, QSizePolicy
 from qgis.core import QgsApplication, QgsFields, QgsCoordinateReferenceSystem, QgsVectorFileWriter, QgsWkbTypes, QgsVectorLayer, QgsProject, QgsRasterLayer, QgsPointXY, QgsCoordinateTransform, QgsRectangle, QgsField
 from datetime import datetime
-from helper import create_geopackage_file, split_array_to_chunks, adjust_color
+from helper import create_geopackage_file, split_array_to_chunks, adjust_color, get_current_date, get_current_time
 from qgis.core import QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer, QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis
 from PyQt5.QtWidgets import QWidgetAction, QToolButton
 
@@ -92,7 +92,7 @@ class DigitalSketchMappingTool:
         self.canvas = self.iface.mapCanvas()
         self.folder_location = None
         self.feature_string = ""
-        self.selected_colour = "#ffff00"
+        self.selected_colour = "#3dc617"
         self.point_layer = None
         self.line_layer = None
         self.polygon_layer = None
@@ -254,6 +254,7 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.mColorButton.colorChanged.connect(self.__colour_changed)
         self.digital_sketch_widget.savePushButton.clicked.connect(self.save_layers)
         self.digital_sketch_widget.settingPushButton.clicked.connect(self.open_settings)
+        self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
 
         self.digital_sketch_widget.linePushButton.clicked.connect(lambda: self.setup_digitizing(self.line_layer, 'line'))
         self.digital_sketch_widget.pointPushButton.clicked.connect(lambda: self.setup_digitizing(self.point_layer, 'point'))
@@ -357,6 +358,8 @@ class DigitalSketchMappingTool:
         elif button_name not in self.feature_string:
             self.feature_string = f'{self.feature_string}_{button_name}'
 
+        self.__update_code_line_edit()
+
         QgsApplication.messageLog().logMessage(
             f'clicked button {button_name} feature_string {self.feature_string}.', 'DigitalSketchPlugin')
 
@@ -425,6 +428,12 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
+    def done_digitizing(self):
+        QgsApplication.messageLog().logMessage("Done Digitizing is called", 'DigitalSketchPlugin')
+        self.digitizing_tool.save_feature()
+
+    # --------------------------------------------------------------------------
+
     def enable_feature_create(self, action_name):
         toolbar = self.iface.digitizeToolBar()
         QgsApplication.messageLog().logMessage(f"Toolbar found: {toolbar.objectName()}", 'DigitalSketchPlugin')
@@ -446,7 +455,7 @@ class DigitalSketchMappingTool:
             self.digitizing_tool = MultiLineDigitizingTool(self.iface, layer)
         else:
             QgsApplication.messageLog().logMessage("single ", 'DigitalSketchPlugin')
-            self.digitizing_tool = StreamDigitizingTool(self.iface, layer, layer_type, is_multipart)
+            self.digitizing_tool = StreamDigitizingTool(self.iface, layer, layer_type)
 
         self.iface.mapCanvas().setMapTool(self.digitizing_tool)
 
@@ -505,7 +514,10 @@ class DigitalSketchMappingTool:
 
         else:
             feature.setAttribute('colour', self.selected_colour)
-            feature.setAttribute('Code', f"Feature_{fid} {self.feature_string}")
+            feature.setAttribute('shape', layer_type)
+            feature.setAttribute('Code', f"{self.feature_string}")
+            feature.setAttribute('Date', get_current_date())
+            feature.setAttribute('Time', get_current_time())
 
         # Update the feature
         layer.updateFeature(feature)
@@ -516,6 +528,8 @@ class DigitalSketchMappingTool:
             # layer.commitChanges()
             # layer.startEditing()
 
+        self.feature_string = ""
+        self.__update_code_line_edit()
         QgsApplication.messageLog().logMessage('finished updating symbology', 'DigitalSketchPlugin')
 
     # --------------------------------------------------------------------------
@@ -599,11 +613,11 @@ class DigitalSketchMappingTool:
                             QPushButton:hover {{
                                 background-color: {light_colour};
                             }}
-                            QPushButton:checked {{
-                                border: 2px dotted black;
-                                background-color: {dark_colour} !important;
-                            }}
                             """)
+            # QPushButton:checked {{
+            #     border: 2px dotted black;
+            #     background-color: {dark_colour} !important;
+            # }}
             layout.addWidget(btn)
             btn.clicked.connect(lambda checked, btn_name=item: self.__button_clicked(btn_name))
             layout.setContentsMargins(2, 2, 2, 2)
@@ -617,6 +631,10 @@ class DigitalSketchMappingTool:
         widget.setLayout(layout)
         return widget
 
+    # --------------------------------------------------------------------------
+
+    def __update_code_line_edit(self):
+        self.digital_sketch_widget.lineEdit.setText(self.feature_string)
     # --------------------------------------------------------------------------
 
     def onClosePlugin(self):

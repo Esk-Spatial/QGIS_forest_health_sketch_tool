@@ -51,7 +51,7 @@ class MultiLineDigitizingTool(QgsMapTool):
                 self.rubber_band.addPoint(pt, False)
         self.rubber_band.show()
 
-    def save_multiline_feature(self):
+    def save_feature(self):
         """Saves the drawn MultiLineString to the layer"""
         multiline_geom = QgsGeometry.fromMultiPolylineXY(self.multi_line_segments)
         feature = QgsFeature(self.layer.fields())
