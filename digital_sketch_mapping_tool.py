@@ -75,6 +75,12 @@ def apply_symbology(layer, iface):
     iface.mapCanvas().refresh()
 
 
+def delete_feature(layer, fid):
+    layer.startEditing()
+    layer.deleteFeature(fid)
+    layer.commitChanges()
+
+
 class DigitalSketchMappingTool:
     """QGIS Plugin Implementation."""
 
@@ -87,6 +93,7 @@ class DigitalSketchMappingTool:
         :type iface: QgsInterface
         """
         # Save reference to the QGIS interface
+        self.last_created_layer = None
         self.digitizing_tool = None
         self.iface = iface
         self.canvas = self.iface.mapCanvas()
@@ -255,6 +262,7 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.savePushButton.clicked.connect(self.save_layers)
         self.digital_sketch_widget.settingPushButton.clicked.connect(self.open_settings)
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
+        self.digital_sketch_widget.deletePushButton.clicked.connect(self.delete_last_feature)
 
         self.digital_sketch_widget.linePushButton.clicked.connect(lambda: self.setup_digitizing(self.line_layer, 'line'))
         self.digital_sketch_widget.pointPushButton.clicked.connect(lambda: self.setup_digitizing(self.point_layer, 'point'))
@@ -434,6 +442,23 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
+    def delete_last_feature(self):
+        if self.last_created_layer is None:
+            return
+
+        if self.last_created_layer["type"] == "line":
+            delete_feature(self.line_layer, self.last_created_layer["fid"])
+
+        elif self.last_created_layer["type"] == "point":
+            delete_feature(self.point_layer, self.last_created_layer["fid"])
+
+        elif self.last_created_layer["type"] == "polygon":
+            delete_feature(self.polygon_layer, self.last_created_layer["fid"])
+
+        self.last_created_layer = None
+
+    # --------------------------------------------------------------------------
+
     def enable_feature_create(self, action_name):
         toolbar = self.iface.digitizeToolBar()
         QgsApplication.messageLog().logMessage(f"Toolbar found: {toolbar.objectName()}", 'DigitalSketchPlugin')
@@ -506,7 +531,7 @@ class DigitalSketchMappingTool:
     def populate_attributes(self, fid, layer, layer_type):
         """Automatically populate attributes for new features"""
         feature = layer.getFeature(fid)
-
+        self.last_created_layer = {"type": layer_type, "fid": fid}
 
         if layer_type == 'note':
             feature.setAttribute('colour', "#FF0000")
@@ -635,6 +660,7 @@ class DigitalSketchMappingTool:
 
     def __update_code_line_edit(self):
         self.digital_sketch_widget.lineEdit.setText(self.feature_string)
+
     # --------------------------------------------------------------------------
 
     def onClosePlugin(self):

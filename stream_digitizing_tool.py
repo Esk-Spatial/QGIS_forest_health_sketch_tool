@@ -1,6 +1,6 @@
 
 from qgis.gui import QgsMapTool, QgsRubberBand
-from qgis.core import QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry
+from qgis.core import QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry, QgsApplication
 from PyQt5.QtCore import Qt
 
 class StreamDigitizingTool(QgsMapTool):
@@ -16,6 +16,10 @@ class StreamDigitizingTool(QgsMapTool):
                                          QgsWkbTypes.LineGeometry if layer_type == 'line' else QgsWkbTypes.PolygonGeometry)
         self.rubber_band.setColor(Qt.red)
         self.rubber_band.setWidth(2)
+        self.temp_rubber_band = QgsRubberBand(self.iface.mapCanvas(),
+                                              QgsWkbTypes.LineGeometry if self.layer_type == 'line' else QgsWkbTypes.PolygonGeometry)
+        self.temp_rubber_band.setColor(Qt.red)
+        self.temp_rubber_band.setWidth(2)
 
     def canvasPressEvent(self, event):
         if event.button() == Qt.LeftButton:  # Stylus down
@@ -50,6 +54,8 @@ class StreamDigitizingTool(QgsMapTool):
         feature = QgsFeature(self.layer.fields())
         feature.setGeometry(geom)
         self.pending_features.append(feature)
+        self.temp_rubber_band.setToGeometry(geom, None)
+        self.rubber_band.reset(QgsWkbTypes.LineGeometry if self.layer_type == 'line' else QgsWkbTypes.PolygonGeometry)
 
     def save_feature(self):
         if not self.pending_features:
@@ -58,6 +64,9 @@ class StreamDigitizingTool(QgsMapTool):
         self.layer.startEditing()
         for feature in self.pending_features:
             self.layer.addFeature(feature)
+
         self.layer.commitChanges()
-        self.rubber_band.reset(QgsWkbTypes.LineGeometry if self.layer_type == 'line' else QgsWkbTypes.PolygonGeometry)
+
         self.pending_features = []
+        self.temp_rubber_band.reset(
+            QgsWkbTypes.LineGeometry if self.layer_type == 'line' else QgsWkbTypes.PolygonGeometry)
