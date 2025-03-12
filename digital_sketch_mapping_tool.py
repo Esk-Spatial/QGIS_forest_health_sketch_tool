@@ -21,6 +21,8 @@
  *                                                                         *
  ***************************************************************************/
 """
+from collections import deque
+
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QVariant
 from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QPushButton, QVBoxLayout, QFileDialog, QDialog, QWidget, QHBoxLayout, QSpacerItem, QSizePolicy
@@ -32,6 +34,7 @@ from PyQt5.QtWidgets import QWidgetAction, QToolButton
 
 from stream_digitizing_tool import StreamDigitizingTool
 from multi_line_tool import MultiLineDigitizingTool
+from feature_identify_tool import FeatureIdentifyTool
 from .app_settings import AppSettingsDialog
 from keypad_manager import KeypadManager
 
@@ -93,7 +96,7 @@ class DigitalSketchMappingTool:
         :type iface: QgsInterface
         """
         # Save reference to the QGIS interface
-        self.last_created_layer = None
+        self.created_layers_stack = deque()
         self.digitizing_tool = None
         self.iface = iface
         self.canvas = self.iface.mapCanvas()
@@ -323,7 +326,7 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def __populate_categories(self):
+    def __populate_categories(self, attributes):
         categories = self.keypad_manager.get_selected_categories()
         attr_box = self.digital_sketch_widget.categoryAttrVerticalLayout
         if not attr_box.isEmpty():
@@ -339,10 +342,10 @@ class DigitalSketchMappingTool:
                 QgsApplication.messageLog().logMessage("items greater than 3", 'DigitalSketchPlugin')
                 chunks = split_array_to_chunks(cat.items)
                 for chunk in chunks:
-                    attr_box.addWidget(self.__populate_buttons_from_list(chunk, cat.colour))
+                    attr_box.addWidget(self.__populate_buttons_from_list(chunk, cat.colour, attributes))
 
             else:
-                attr_box.addWidget(self.__populate_buttons_from_list(cat.items, cat.colour))
+                attr_box.addWidget(self.__populate_buttons_from_list(cat.items, cat.colour, attributes))
 
     # --------------------------------------------------------------------------
 
@@ -386,6 +389,7 @@ class DigitalSketchMappingTool:
             self.setup_stream_digitizing(layer, layer_type)
 
         elif layer_type == 'point':
+            # TODO
             QgsApplication.messageLog().logMessage("point layer", 'DigitalSketchPlugin')
             self.enable_feature_create("Add Point Feature")
 
@@ -407,23 +411,31 @@ class DigitalSketchMappingTool:
     def save_layers(self):
         QgsApplication.messageLog().logMessage("Save layers is called", 'DigitalSketchPlugin')
         if self.point_layer.isEditable():
+            QgsApplication.messageLog().logMessage("Point layer is editable", 'DigitalSketchPlugin')
             self.point_layer.commitChanges()  # Save the changes
+            self.point_layer.stopEditing(True)  # Save the changes
             self.iface.messageBar().pushMessage("Success", "Changes committed successfully to point layer!",
                                                 level=Qgis.Success)
 
         if self.line_layer.isEditable():
+            QgsApplication.messageLog().logMessage("Line layer is editable", 'DigitalSketchPlugin')
             self.line_layer.commitChanges()  # Save the changes
+            self.line_layer.stopEditing(True)  # Save the changes
             self.iface.messageBar().pushMessage("Success", "Changes committed successfully to line layer!",
                                                 level=Qgis.Success)
 
         if self.polygon_layer.isEditable():
+            QgsApplication.messageLog().logMessage("Polygon layer is editable", 'DigitalSketchPlugin')
             self.polygon_layer.commitChanges()  # Save the changes
+            self.polygon_layer.stopEditing(True)  # Save the changes
             self.iface.messageBar().pushMessage("Success", "Changes committed successfully to polygon layer!",
                                                 level=Qgis.Success)
         if self.notes_layer.isEditable():
             self.notes_layer.commitChanges()  # Save the changes
             self.iface.messageBar().pushMessage("Success", "Changes committed successfully to notes layer!",
                                                 level=Qgis.Success)
+        self.remove_map_tool()
+        self.__check_for_current_selection()
 
     # --------------------------------------------------------------------------
 
@@ -432,7 +444,7 @@ class DigitalSketchMappingTool:
 
         settings_dialog = AppSettingsDialog(self.keypad_manager)
         if settings_dialog.exec_() == QDialog.Accepted:
-            self.__populate_categories()
+            self.__populate_categories(settings_dialog.get_attributes())
 
     # --------------------------------------------------------------------------
 
@@ -443,19 +455,19 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def delete_last_feature(self):
-        if self.last_created_layer is None:
+        if len(self.created_layers_stack) == 0:
             return
 
-        if self.last_created_layer["type"] == "line":
-            delete_feature(self.line_layer, self.last_created_layer["fid"])
+        last_layer = self.created_layers_stack.pop()
 
-        elif self.last_created_layer["type"] == "point":
-            delete_feature(self.point_layer, self.last_created_layer["fid"])
+        if last_layer["type"] == "line":
+            delete_feature(self.line_layer, last_layer["fid"])
 
-        elif self.last_created_layer["type"] == "polygon":
-            delete_feature(self.polygon_layer, self.last_created_layer["fid"])
+        elif last_layer["type"] == "point":
+            delete_feature(self.point_layer, last_layer["fid"])
 
-        self.last_created_layer = None
+        elif last_layer["type"] == "polygon":
+            delete_feature(self.polygon_layer, last_layer["fid"])
 
     # --------------------------------------------------------------------------
 
@@ -483,6 +495,12 @@ class DigitalSketchMappingTool:
             self.digitizing_tool = StreamDigitizingTool(self.iface, layer, layer_type)
 
         self.iface.mapCanvas().setMapTool(self.digitizing_tool)
+
+    # --------------------------------------------------------------------------
+
+    def remove_map_tool(self):
+        self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
+        self.iface.actionPan().trigger()
 
     # --------------------------------------------------------------------------
 
@@ -531,7 +549,7 @@ class DigitalSketchMappingTool:
     def populate_attributes(self, fid, layer, layer_type):
         """Automatically populate attributes for new features"""
         feature = layer.getFeature(fid)
-        self.last_created_layer = {"type": layer_type, "fid": fid}
+        self.created_layers_stack.append({"type": layer_type, "fid": fid})
 
         if layer_type == 'note':
             feature.setAttribute('colour', "#FF0000")
@@ -562,19 +580,19 @@ class DigitalSketchMappingTool:
     def __create_geopackage_file(self):
         QgsApplication.messageLog().logMessage('creating new gpkg file', 'DigitalSketchPlugin')
         date_time_str = datetime.now().strftime("%d-%m-%Y_%I-%M-%p")
-        shape_file_name = f"{date_time_str}.gpkg"
-        shape_file_path = os.path.join(self.folder_location, shape_file_name)
-        QgsApplication.messageLog().logMessage(f'file name: {shape_file_name} file path: {shape_file_path}',
+        gpkg_file_name = f"{date_time_str}.gpkg"
+        gpkg_file_name = os.path.join(self.folder_location, gpkg_file_name)
+        QgsApplication.messageLog().logMessage(f'file name: {gpkg_file_name} file path: {gpkg_file_name}',
                                                'DigitalSketchPlugin')
 
         # get project CRS information
         crs_ors = str(self.canvas.mapSettings().destinationCrs().toProj())
-        create_geopackage_file(shape_file_path, crs_ors)
+        create_geopackage_file(gpkg_file_name, crs_ors)
 
-        self.point_layer = QgsVectorLayer(f"{shape_file_path}|layername=points", "points", "ogr")
-        self.line_layer = QgsVectorLayer(f"{shape_file_path}|layername=lines", "lines", "ogr")
-        self.polygon_layer = QgsVectorLayer(f"{shape_file_path}|layername=polygons", "polygons", "ogr")
-        self.notes_layer = QgsVectorLayer(f"{shape_file_path}|layername=lines", "notes", "ogr")
+        self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=points", "points", "ogr")
+        self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=lines", "lines", "ogr")
+        self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=polygons", "polygons", "ogr")
+        self.notes_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=lines", "notes", "ogr")
 
         self.point_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "plugin_style.qml"))
         self.polygon_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "plugin_style.qml"))
@@ -584,6 +602,16 @@ class DigitalSketchMappingTool:
         QgsProject.instance().addMapLayer(self.line_layer)
         QgsProject.instance().addMapLayer(self.polygon_layer)
         QgsProject.instance().addMapLayer(self.notes_layer)
+
+        # TODO
+        # point_tool = FeatureIdentifyTool(self.iface, self.point_layer)
+        # self.iface.mapCanvas().setMapTool(point_tool)
+
+        # polygon_tool = FeatureIdentifyTool(self.iface)
+        # self.iface.mapCanvas().setMapTool(polygon_tool)
+
+        # line_tool = FeatureIdentifyTool(self.iface, self.line_layer)
+        # self.iface.mapCanvas().setMapTool(line_tool)
 
         self.canvas.refresh()
 
@@ -598,10 +626,10 @@ class DigitalSketchMappingTool:
 
     #--------------------------------------------------------------------------
 
-    def __check_for_current_selection(self, selection):
+    def  __check_for_current_selection(self, selection=None):
         if self.pressed_btn is not None:
             QgsApplication.messageLog().logMessage(f"btn already pressed {self.pressed_btn}", 'DigitalSketchPlugin')
-            self.save_layers()
+            # self.save_layers()
 
             if self.pressed_btn == 'line':
                 self.digital_sketch_widget.linePushButton.setChecked(False)
@@ -612,26 +640,31 @@ class DigitalSketchMappingTool:
             elif self.pressed_btn == 'notes':
                 self.digital_sketch_widget.notesPushButton.setChecked(False)
 
-        self.pressed_btn = selection
+        if selection is not  None:
+            self.pressed_btn = selection
 
     # --------------------------------------------------------------------------
 
-    def __populate_buttons_from_list(self, items, colour):
+    def __populate_buttons_from_list(self, items, colour, attributes):
         layout = QHBoxLayout()
         widget = QWidget()
         item_count = len(items)
         light_colour = adjust_color(colour, 30)
         dark_colour = adjust_color(colour, -15)
         QgsApplication.messageLog().logMessage(f"colour: {colour}, light: {light_colour}, dark: {dark_colour}", 'DigitalSketchPlugin')
+        QgsApplication.messageLog().logMessage(f'colour: {attributes["colour"]} font {attributes["font"]}', 'DigitalSketchPlugin')
         for item in items:
             btn = QPushButton(item)
-            btn.setMinimumHeight(30)
+            btn.setMinimumHeight(attributes["height"])
+            btn.setMaximumHeight(attributes["height"])
+            btn.setMinimumWidth(attributes["width"])
+            btn.setMaximumWidth(attributes["width"])
             btn.setCheckable(True)
             btn.setStyleSheet(f"""
                             QPushButton {{
                                 background-color: {colour};
-                                color: black;
-                                font: bold 11px;
+                                color: {attributes["colour"]};
+                                font: {attributes["font"]};
                                 border-radius: 5px;
                                 padding: 5px 5x;
                             }}
