@@ -1,3 +1,4 @@
+import json
 
 from qgis.PyQt.QtWidgets import QDialog, QCheckBox, QVBoxLayout, QScrollArea, QWidget, QListWidgetItem, QHBoxLayout, QLabel, QPushButton, QSpacerItem, QSizePolicy, QDialogButtonBox
 from qgis.PyQt import uic
@@ -26,12 +27,10 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.elementListWidget.itemSelectionChanged.connect(self._on_element_item_selected)
         self.selected_category = ''
         self.selected_element = ''
-        self.selected_colour = '#000000'
-        self.selected_font_family = 'MS Shell Dlg 2'
-        self.font_size = '8px'
-        self.selected_font = f'normal {self.font_size} "{self.selected_font_family}"'
-        self.font_weight = ""
-        self.font_style = "normal"
+        self.colour = '#000000'
+        self.family = 'MS Shell Dlg 2'
+        self.size = '8px'
+        self.font = f'normal {self.size} "{self.family}"'
         self.height = 30
         self.width = 100
         self.attributes = None
@@ -50,6 +49,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.buttonBox.button(QDialogButtonBox.Apply).clicked.connect(self.apply_settings)
         self.buttonBox.button(QDialogButtonBox.Discard).clicked.connect(self.discard_settings)
         self.mFontButton.changed.connect(self._font_changed)
+        self.mColorButton.colorChanged.connect(self._colour_changed)
 
     def move_category(self, direction):
         QgsApplication.messageLog().logMessage(f"move_category: {direction}", 'DigitalSketchPlugin')
@@ -84,9 +84,8 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
     def apply_settings(self):
         QgsApplication.messageLog().logMessage("apply_settings", 'DigitalSketchPlugin')
         self.updated_settings = True
-        self.attributes = dict(family= self.selected_font_family, size = self.font_size,
-                               font=self.selected_font, colour=self.selected_colour, style=self.font_style,
-                               weight=self.font_weight, height=float(self.heightLineEdit.text().strip()),
+        self.attributes = dict(family= self.family, size = self.size, font=self.font, colour=self.colour,
+                               height=float(self.heightLineEdit.text().strip()),
                                width=float(self.widthLineEdit.text().strip()))
         self.keypad_manager.update_dataset()
         self.accept()
@@ -206,20 +205,17 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
                     QgsApplication.messageLog().logMessage(f"Selected Item: {label.text()}", 'DigitalSketchPlugin')
 
     def _colour_changed(self, colour):
-        self.selected_colour = colour.name()
-        QgsApplication.messageLog().logMessage(f'selected colour: {self.selected_colour}', 'DigitalSketchPlugin')
+        self.colour = colour.name()
+        QgsApplication.messageLog().logMessage(f'Colour: {self.colour}', 'DigitalSketchPlugin')
 
     def _font_changed(self):
-        selected_font = self.mFontButton.currentFont()
+        font = self.mFontButton.currentFont()
 
         # Extracting font properties
-        self.selected_font_family = selected_font.family()
-        self.font_size = f'{selected_font.pixelSize()}px'
-        font_type = "bold" if selected_font.bold() else "normal"
-        font_colour = self.mFontButton.textFormat().color()
-        self.font_weight = selected_font.weight()
-        self.font_style = "italic" if selected_font.italic() else "normal"
-        self.selected_colour = font_colour.name()
-        self.selected_font = f'{font_type} {self.font_size}'
+        self.family = font.family()
+        self.size = f'{font.pointSize()}pt'
+        bold = "bold" if font.bold() else "normal"
+        italic = " italic" if font.italic() else ""
+        self.font = f'{bold}{italic} {self.size}'
 
-        QgsApplication.messageLog().logMessage(f"gg {selected_font.pointSizeF()}  sdwd {selected_font.style()} Font: {self.selected_font}, Weight: {self.font_weight}, Style: {self.font_style} Colour: {self.selected_colour}", 'DigitalSketchPlugin')
+        QgsApplication.messageLog().logMessage(f"Font:{self.font}, Family:{self.family}", 'DigitalSketchPlugin')
