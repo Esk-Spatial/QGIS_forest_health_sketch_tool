@@ -13,25 +13,28 @@ class StreamDigitizingTool(QgsMapTool):
         self.pending_features = []
         self.digitizing = False
         self.rubber_band = QgsRubberBand(self.canvas(),
-                                         QgsWkbTypes.LineGeometry if layer_type == 'line' else QgsWkbTypes.PolygonGeometry)
+                                         QgsWkbTypes.PointGeometry if layer_type == 'point' else QgsWkbTypes.PolygonGeometry)
         self.rubber_band.setColor(Qt.red)
         self.rubber_band.setWidth(2)
 
     def canvasPressEvent(self, event):
         if event.button() == Qt.LeftButton:  # Stylus down
-            self.start_digitizing(event)
+            if self.layer_type == 'point':
+                self.add_point(event)
+            else:
+                self.start_digitizing(event)
 
     def canvasMoveEvent(self, event):
         if self.digitizing:
             self.add_vertex(event)
 
     def canvasReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton:  # Stylus up
+        if event.button() == Qt.LeftButton and self.layer_type != 'point':  # Stylus up & not point layer type
             self.finish_digitizing()
 
     def start_digitizing(self, event):
         self.stream_points = [self.toMapCoordinates(event.pos())]
-        self.rubber_band.reset(QgsWkbTypes.LineGeometry if self.layer_type == 'line' else QgsWkbTypes.PolygonGeometry)
+        self.rubber_band.reset(QgsWkbTypes.PolygonGeometry if self.layer_type == 'polygon' else QgsWkbTypes.LineGeometry)
         self.digitizing = True
 
     def add_vertex(self, event):
@@ -44,13 +47,18 @@ class StreamDigitizingTool(QgsMapTool):
         if not self.stream_points:
             return
         self.digitizing = False
-        geom = QgsGeometry.fromPolylineXY(
-            self.stream_points) if self.layer_type == 'line' else QgsGeometry.fromPolygonXY([self.stream_points])
+        geom = QgsGeometry.fromPolylineXY(self.stream_points) if self.layer_type == 'line' else QgsGeometry.fromPolygonXY([self.stream_points])
 
         feature = QgsFeature(self.layer.fields())
         feature.setGeometry(geom)
         self.pending_features.append(feature)
         # self.temp_rubber_band.setToGeometry(geom, None)
+
+    def add_point(self, event):
+        point = self.toMapCoordinates(event.pos())
+        feature = QgsFeature(self.layer.fields())
+        feature.setGeometry(QgsGeometry.fromPointXY(point))
+        self.pending_features.append(feature)
 
     def save_feature(self):
         if not self.pending_features:

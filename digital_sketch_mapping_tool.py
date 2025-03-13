@@ -392,6 +392,7 @@ class DigitalSketchMappingTool:
             # TODO
             QgsApplication.messageLog().logMessage("point layer", 'DigitalSketchPlugin')
             self.enable_feature_create("Add Point Feature")
+            self.setup_stream_digitizing(layer, layer_type)
 
         elif layer_type == 'polygon':
             QgsApplication.messageLog().logMessage("polygon layer", 'DigitalSketchPlugin')
@@ -680,7 +681,7 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def __update_code_line_edit(self):
-        self.digital_sketch_widget.lineEdit.setText(self.feature_string)
+        self.digital_sketch_widget.codeLineEdit.setText(self.feature_string)
 
     # --------------------------------------------------------------------------
 

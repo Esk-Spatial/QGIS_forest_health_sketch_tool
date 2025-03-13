@@ -1,6 +1,5 @@
-import json
 
-from PyQt5.QtGui import QFont, QColor
+from PyQt5.QtGui import QColor
 from qgis.PyQt.QtWidgets import QDialog, QCheckBox, QVBoxLayout, QScrollArea, QWidget, QListWidgetItem, QHBoxLayout, QLabel, QPushButton, QSpacerItem, QSizePolicy, QDialogButtonBox
 from qgis.PyQt import uic
 from qgis.core import QgsApplication
@@ -28,7 +27,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.selected_category = ''
         self.selected_element = ''
         self.colour = '#000000'
-        self.font = f'normal 8pt "MS Shell Dlg 2"'
+        self.font = self.mFontButton.currentFont()
         self.height = 30
         self.width = 100
         self.attributes = None
