@@ -102,13 +102,14 @@ class DigitalSketchMappingTool:
         self.canvas = self.iface.mapCanvas()
         self.folder_location = None
         self.feature_string = ""
-        self.selected_colour = "#3dc617"
+        self.selected_colour = "#3dc6177f"
         self.point_layer = None
         self.line_layer = None
         self.polygon_layer = None
         self.plugin_name = _plugin_name_
         self.keypad_manager = KeypadManager()
         self.pressed_btn = None
+        self.attributes = None
 
         self.bing_maps_url = (
             "https://t0.tiles.virtualearth.net/tiles/a{q}.jpeg?g=685&mkt=en-us&n=z"
@@ -325,7 +326,7 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def __populate_categories(self, attributes):
+    def __populate_categories(self):
         categories = self.keypad_manager.get_selected_categories()
         attr_box = self.digital_sketch_widget.categoryAttrVerticalLayout
         if not attr_box.isEmpty():
@@ -341,10 +342,10 @@ class DigitalSketchMappingTool:
                 QgsApplication.messageLog().logMessage("items greater than 3", 'DigitalSketchPlugin')
                 chunks = split_array_to_chunks(cat.items)
                 for chunk in chunks:
-                    attr_box.addWidget(self.__populate_buttons_from_list(chunk, cat.colour, attributes))
+                    attr_box.addWidget(self.__populate_buttons_from_list(chunk, cat.colour))
 
             else:
-                attr_box.addWidget(self.__populate_buttons_from_list(cat.items, cat.colour, attributes))
+                attr_box.addWidget(self.__populate_buttons_from_list(cat.items, cat.colour))
 
     # --------------------------------------------------------------------------
 
@@ -433,9 +434,10 @@ class DigitalSketchMappingTool:
     def open_settings(self):
         QgsApplication.messageLog().logMessage("Open settings is called", 'DigitalSketchPlugin')
 
-        settings_dialog = AppSettingsDialog(self.keypad_manager)
+        settings_dialog = AppSettingsDialog(self.keypad_manager, self.attributes)
         if settings_dialog.exec_() == QDialog.Accepted:
-            self.__populate_categories(settings_dialog.get_attributes())
+            self.attributes = settings_dialog.get_attributes()
+            self.__populate_categories()
 
     # --------------------------------------------------------------------------
 
@@ -634,7 +636,7 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def __populate_buttons_from_list(self, items, colour, attributes):
+    def __populate_buttons_from_list(self, items, colour):
         layout = QHBoxLayout()
         widget = QWidget()
         item_count = len(items)
@@ -642,16 +644,15 @@ class DigitalSketchMappingTool:
         # dark_colour = adjust_color(colour, -15)
         for item in items:
             btn = QPushButton(item)
-            btn.setMinimumHeight(attributes["height"])
-            btn.setMaximumHeight(attributes["height"])
-            btn.setMinimumWidth(attributes["width"])
-            btn.setMaximumWidth(attributes["width"])
+            btn.setMinimumHeight(self.attributes["height"])
+            btn.setMaximumHeight(self.attributes["height"])
+            btn.setMinimumWidth(self.attributes["width"])
+            btn.setMaximumWidth(self.attributes["width"])
+            btn.setFont(self.attributes["font"])
             btn.setStyleSheet(f"""
                             QPushButton {{
                                 background-color: {colour};
-                                color: {attributes["colour"]};
-                                font-family: "{attributes["family"]}";
-                                font: {attributes["font"]};
+                                color: {self.attributes["colour"]};
                                 border-radius: 5px;
                                 padding: 5px 5x;
                             }}

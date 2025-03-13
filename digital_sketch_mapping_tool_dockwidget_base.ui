@@ -404,7 +404,7 @@
              </size>
             </property>
             <property name="color">
-             <color>
+             <color alpha="122">
               <red>61</red>
               <green>198</green>
               <blue>23</blue>
@@ -414,7 +414,7 @@
              <bool>true</bool>
             </property>
             <property name="defaultColor">
-             <color>
+             <color alpha="122">
               <red>61</red>
               <green>198</green>
               <blue>23</blue>
@@ -539,6 +539,9 @@
           <enum>QFrame::Raised</enum>
          </property>
          <layout class="QVBoxLayout" name="categoryAttrVerticalLayout">
+          <property name="spacing">
+           <number>2</number>
+          </property>
           <property name="leftMargin">
            <number>2</number>
           </property>

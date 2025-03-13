@@ -1,11 +1,11 @@
 import json
 
+from PyQt5.QtGui import QFont, QColor
 from qgis.PyQt.QtWidgets import QDialog, QCheckBox, QVBoxLayout, QScrollArea, QWidget, QListWidgetItem, QHBoxLayout, QLabel, QPushButton, QSpacerItem, QSizePolicy, QDialogButtonBox
 from qgis.PyQt import uic
 from qgis.core import QgsApplication
 import os
 from qgis.gui import QgsColorButton
-from qgis.PyQt.QtGui import QColor
 
 from new_category_element import NewCategoryElement
 
@@ -18,7 +18,7 @@ def update_colour(pad, colour):
 
 
 class AppSettingsDialog(QDialog, FORM_CLASS):
-    def __init__(self, keypad_manager, parent=None):
+    def __init__(self, keypad_manager, attributes, parent=None):
         super(AppSettingsDialog, self).__init__(parent)
         self.setupUi(self)
         self.keypad_manager = keypad_manager
@@ -28,12 +28,17 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.selected_category = ''
         self.selected_element = ''
         self.colour = '#000000'
-        self.family = 'MS Shell Dlg 2'
-        self.size = '8px'
-        self.font = f'normal {self.size} "{self.family}"'
+        self.font = f'normal 8pt "MS Shell Dlg 2"'
         self.height = 30
         self.width = 100
         self.attributes = None
+
+        if attributes is not None:
+            self.mFontButton.setCurrentFont(attributes["font"])
+            self.mColorButton.setColor(QColor(attributes["colour"]))
+            self.heightLineEdit.setText(f'{attributes["height"]}')
+            self.widthLineEdit.setText(f'{attributes["width"]}')
+
         self.updated_settings = False
         self._clear_and_populate_categories()
 
@@ -84,7 +89,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
     def apply_settings(self):
         QgsApplication.messageLog().logMessage("apply_settings", 'DigitalSketchPlugin')
         self.updated_settings = True
-        self.attributes = dict(family= self.family, size = self.size, font=self.font, colour=self.colour,
+        self.attributes = dict(font=self.font, colour=self.colour,
                                height=float(self.heightLineEdit.text().strip()),
                                width=float(self.widthLineEdit.text().strip()))
         self.keypad_manager.update_dataset()
@@ -209,13 +214,5 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         QgsApplication.messageLog().logMessage(f'Colour: {self.colour}', 'DigitalSketchPlugin')
 
     def _font_changed(self):
-        font = self.mFontButton.currentFont()
-
-        # Extracting font properties
-        self.family = font.family()
-        self.size = f'{font.pointSize()}pt'
-        bold = "bold" if font.bold() else "normal"
-        italic = " italic" if font.italic() else ""
-        self.font = f'{bold}{italic} {self.size}'
-
-        QgsApplication.messageLog().logMessage(f"Font:{self.font}, Family:{self.family}", 'DigitalSketchPlugin')
+        self.font = self.mFontButton.currentFont()
+        QgsApplication.messageLog().logMessage("Font updated", 'DigitalSketchPlugin')
