@@ -1,6 +1,6 @@
 
 from qgis.gui import QgsMapTool, QgsRubberBand
-from qgis.core import QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry
+from qgis.core import QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry, QgsApplication
 from PyQt5.QtCore import Qt
 
 class StreamDigitizingTool(QgsMapTool):
@@ -10,6 +10,7 @@ class StreamDigitizingTool(QgsMapTool):
         self.layer = layer
         self.layer_type = layer_type
         self.stream_points = []
+        self.pending_features = []
         self.digitizing = False
         self.rubber_band = QgsRubberBand(self.canvas(),
                                          QgsWkbTypes.LineGeometry if layer_type == 'line' else QgsWkbTypes.PolygonGeometry)
@@ -48,7 +49,17 @@ class StreamDigitizingTool(QgsMapTool):
 
         feature = QgsFeature(self.layer.fields())
         feature.setGeometry(geom)
+        self.pending_features.append(feature)
+        # self.temp_rubber_band.setToGeometry(geom, None)
+
+    def save_feature(self):
+        if not self.pending_features:
+            return
+
         self.layer.startEditing()
-        self.layer.addFeature(feature)
+        for feature in self.pending_features:
+            self.layer.addFeature(feature)
+
         self.layer.commitChanges()
-        self.rubber_band.reset(QgsWkbTypes.LineGeometry if self.layer_type == 'line' else QgsWkbTypes.PolygonGeometry)
+        self.rubber_band.reset()
+        self.pending_features = []
