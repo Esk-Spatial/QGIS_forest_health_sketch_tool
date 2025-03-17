@@ -49,6 +49,8 @@ def setup_layer_attr(layer):
     layer.CreateField(ogr.FieldDefn("Code", ogr.OFTString))
     layer.CreateField(ogr.FieldDefn("LAT", ogr.OFSTFloat32))
     layer.CreateField(ogr.FieldDefn("LON", ogr.OFSTFloat32))
+    layer.CreateField(ogr.FieldDefn("Surveyor", ogr.OFTString))
+    layer.CreateField(ogr.FieldDefn("Type", ogr.OFTString))
     layer.CreateField(ogr.FieldDefn("Date", ogr.OFTString))
     layer.CreateField(ogr.FieldDefn("Time", ogr.OFTString))
 

@@ -26,13 +26,20 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.elementListWidget.itemSelectionChanged.connect(self._on_element_item_selected)
         self.selected_category = ''
         self.selected_element = ''
-        self.colour = '#000000'
+        self.folder_location = ''
+        self.colour = self.mColorButton.color().name(QColor.HexArgb)
+        self.feature_colour = self.featureColorButton.color().name(QColor.HexArgb)
         self.font = self.mFontButton.currentFont()
         self.height = 30
         self.width = 100
         self.attributes = None
 
         if attributes is not None:
+            self.folderQgsFileWidget.setFilePath(attributes["folder_path"])
+            self.folderQgsFileWidget.setReadOnly(True)
+            self.featureColorButton.setColor(QColor(attributes["feature_colour"]))
+            self.heightLineEdit.setText(attributes["surveyor"])
+            self.heightLineEdit.setText(attributes["type_txt"])
             self.mFontButton.setCurrentFont(attributes["font"])
             self.mColorButton.setColor(QColor(attributes["colour"]))
             self.heightLineEdit.setText(f'{attributes["height"]}')
@@ -53,7 +60,9 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.buttonBox.button(QDialogButtonBox.Apply).clicked.connect(self.apply_settings)
         self.buttonBox.button(QDialogButtonBox.Discard).clicked.connect(self.discard_settings)
         self.mFontButton.changed.connect(self._font_changed)
+        self.featureColorButton.colorChanged.connect(self._feature_colour_changed)
         self.mColorButton.colorChanged.connect(self._colour_changed)
+        self.folderQgsFileWidget.fileChanged.connect(self._set_folder_location)
 
     def move_category(self, direction):
         QgsApplication.messageLog().logMessage(f"move_category: {direction}", 'DigitalSketchPlugin')
@@ -88,8 +97,10 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
     def apply_settings(self):
         QgsApplication.messageLog().logMessage("apply_settings", 'DigitalSketchPlugin')
         self.updated_settings = True
-        self.attributes = dict(font=self.font, colour=self.colour,
-                               height=float(self.heightLineEdit.text().strip()),
+        self.folderQgsFileWidget.setReadOnly(True)
+        self.attributes = dict(folder_path=self.folder_location, feature_colour=self.feature_colour,
+                               surveyor=self.surveyourLineEdit.text().strip(), type_txt=self.typeLineEdit.text().strip(),
+                               font=self.font, colour=self.colour, height=float(self.heightLineEdit.text().strip()),
                                width=float(self.widthLineEdit.text().strip()))
         self.keypad_manager.update_dataset()
         self.accept()
@@ -209,8 +220,17 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
                     QgsApplication.messageLog().logMessage(f"Selected Item: {label.text()}", 'DigitalSketchPlugin')
 
     def _colour_changed(self, colour):
-        self.colour = colour.name()
+        self.colour = colour.name(QColor.HexArgb)
         QgsApplication.messageLog().logMessage(f'Colour: {self.colour}', 'DigitalSketchPlugin')
+
+    def _feature_colour_changed(self, colour):
+        self.feature_colour = colour.name(QColor.HexArgb)
+        QgsApplication.messageLog().logMessage(f'Colour: {self.colour}', 'DigitalSketchPlugin')
+
+    def _set_folder_location(self, folder):
+        QgsApplication.messageLog().logMessage(f'Directory path {folder}.', 'DigitalSketchPlugin')
+        if folder:
+            self.folder_location = folder
 
     def _font_changed(self):
         self.font = self.mFontButton.currentFont()

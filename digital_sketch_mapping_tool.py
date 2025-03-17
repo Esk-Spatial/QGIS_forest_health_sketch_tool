@@ -102,7 +102,8 @@ class DigitalSketchMappingTool:
         self.canvas = self.iface.mapCanvas()
         self.folder_location = None
         self.feature_string = ""
-        self.selected_colour = "#3dc6177f"
+        self.selected_colour = "#3dc61780"
+        self.folder_location_set = False
         self.point_layer = None
         self.line_layer = None
         self.polygon_layer = None
@@ -110,6 +111,7 @@ class DigitalSketchMappingTool:
         self.keypad_manager = KeypadManager()
         self.pressed_btn = None
         self.attributes = None
+        self.layers_saved = 0
 
         self.bing_maps_url = (
             "https://t0.tiles.virtualearth.net/tiles/a{q}.jpeg?g=685&mkt=en-us&n=z"
@@ -259,9 +261,6 @@ class DigitalSketchMappingTool:
             callback=self.run,
             parent=self.iface.mainWindow())
 
-        self.check_and_get_folder()
-        self.digital_sketch_widget.setFolderPushButton.clicked.connect(self.__set_folder_location)
-        self.digital_sketch_widget.mColorButton.colorChanged.connect(self.__colour_changed)
         self.digital_sketch_widget.savePushButton.clicked.connect(self.save_layers)
         self.digital_sketch_widget.settingPushButton.clicked.connect(self.open_settings)
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
@@ -316,7 +315,7 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def __set_folder_location(self):
-        folder = self.digital_sketch_widget.folderQgsFileWidget.filePath()
+        folder = self.attributes['folder_path']
         QgsApplication.messageLog().logMessage(f'Directory path {folder}.', 'DigitalSketchPlugin')
         if folder:
             self.folder_location = folder
@@ -346,12 +345,6 @@ class DigitalSketchMappingTool:
 
             else:
                 attr_box.addWidget(self.__populate_buttons_from_list(cat.items, cat.colour))
-
-    # --------------------------------------------------------------------------
-
-    def __colour_changed(self, colour):
-        self.selected_colour = colour.name()
-        QgsApplication.messageLog().logMessage(f'selected colour: {self.selected_colour}', 'DigitalSketchPlugin')
 
     # --------------------------------------------------------------------------
 
@@ -438,6 +431,10 @@ class DigitalSketchMappingTool:
         settings_dialog = AppSettingsDialog(self.keypad_manager, self.attributes)
         if settings_dialog.exec_() == QDialog.Accepted:
             self.attributes = settings_dialog.get_attributes()
+            self.selected_colour = self.attributes['feature_colour']
+            if not self.folder_location_set:
+                self.folder_location_set = True
+                self.__set_folder_location()
             self.__populate_categories()
 
     # --------------------------------------------------------------------------
@@ -543,18 +540,34 @@ class DigitalSketchMappingTool:
     def populate_attributes(self, fid, layer, layer_type):
         """Automatically populate attributes for new features"""
         feature = layer.getFeature(fid)
+        self.layers_saved += 1
         self.created_layers_stack.append({"type": layer_type, "fid": fid})
 
-        if layer_type == 'note':
-            feature.setAttribute('colour', "#FF0000")
-            feature.setAttribute('Code', "")
-
+        # if layer_type == 'note':
+        #     feature.setAttribute('colour', "#FF0000")
+        #     feature.setAttribute('Code', "")
+        #
+        # else:
+        lat = None
+        lon = None
+        geom = feature.geometry()
+        if layer_type == 'point':
+            point = geom.asPoint()
+            lat, lon = point.y(), point.x()
         else:
-            feature.setAttribute('colour', self.selected_colour)
-            feature.setAttribute('shape', layer_type)
-            feature.setAttribute('Code', f"{self.feature_string}")
-            feature.setAttribute('Date', get_current_date())
-            feature.setAttribute('Time', get_current_time())
+            centroid = geom.centroid().asPoint()
+            lat, lon = centroid.y(), centroid.x()
+
+        QgsApplication.messageLog().logMessage(f'Lat: {lat}, Lon: {lon} number of feature {self.digitizing_tool.number_of_items_to_update}', 'DigitalSketchPlugin')
+        feature.setAttribute('colour', self.selected_colour)
+        feature.setAttribute('shape', layer_type)
+        feature.setAttribute('Code', f"{self.feature_string}")
+        feature.setAttribute('LAT', f"{lat}")
+        feature.setAttribute('LON', f"{lon}")
+        feature.setAttribute('Surveyor', self.attributes['surveyor'])
+        feature.setAttribute('Type', self.attributes['type_txt'])
+        feature.setAttribute('Date', get_current_date())
+        feature.setAttribute('Time', get_current_time())
 
         # Update the feature
         layer.updateFeature(feature)
@@ -562,12 +575,14 @@ class DigitalSketchMappingTool:
 
         if layer.isEditable():
             QgsApplication.messageLog().logMessage('layer is editable', 'DigitalSketchPlugin')
-            # layer.commitChanges()
-            # layer.startEditing()
+            #layer.commitChanges()
+            #layer.startEditing()
 
-        self.feature_string = ""
-        self.__update_code_line_edit()
-        QgsApplication.messageLog().logMessage('finished updating symbology', 'DigitalSketchPlugin')
+        if self.layers_saved == self.digitizing_tool.number_of_items_to_update:
+            self.layers_saved = 0
+            self.feature_string = ""
+            self.__update_code_line_edit()
+            QgsApplication.messageLog().logMessage('finished updating symbology', 'DigitalSketchPlugin')
 
     # --------------------------------------------------------------------------
 
@@ -606,15 +621,6 @@ class DigitalSketchMappingTool:
         # self.iface.mapCanvas().setMapTool(line_tool)
 
         self.canvas.refresh()
-
-    # --------------------------------------------------------------------------
-
-    def check_and_get_folder(self):
-        if not self.folder_location:  # Check if empty or None
-            QgsApplication.messageLog().logMessage('folder not set', 'DigitalSketchPlugin')
-            self.digital_sketch_widget.folderLbl.setVisible(True)
-            self.digital_sketch_widget.folderQgsFileWidget.setVisible(True)
-            self.digital_sketch_widget.setFolderPushButton.setVisible(True)
 
     #--------------------------------------------------------------------------
 
