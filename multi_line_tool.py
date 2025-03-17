@@ -6,6 +6,7 @@ class MultiLineDigitizingTool(QgsMapTool):
     def __init__(self, iface, layer):
         super().__init__(iface.mapCanvas())
         self.iface = iface
+        self.number_of_items_to_update = 0
         self.layer = layer
         self.digitizing = False
         self.stylus_down = False
@@ -20,7 +21,6 @@ class MultiLineDigitizingTool(QgsMapTool):
         if event.button() == Qt.LeftButton:
             self.stylus_down = True
             self.current_line = [self.toMapCoordinates(event.pos())]  # Start a new line
-            # self.rubber_band.reset(QgsWkbTypes.LineGeometry)
 
     def canvasMoveEvent(self, event):
         """Continue adding points to the current line"""
@@ -38,15 +38,10 @@ class MultiLineDigitizingTool(QgsMapTool):
                 self.multi_line_segments.append(self.current_line)  # Store as a new segment
                 self.update_rubber_band()
 
-    def keyPressEvent(self, event):
-        """Save MultiLineString when Enter is pressed"""
-        if event.key() == Qt.Key_Return:
-            self.save_multiline_feature()
-
     def update_rubber_band(self):
         """Updates the rubber band to display all drawn lines"""
         self.rubber_band.reset(QgsWkbTypes.LineGeometry)
-        for line in self.multi_line_segments + ([self.current_line] if self.current_line else []):
+        for line in self.multi_line_segments + ([self.current_line] if self.current_line else []): #canvas remove ([self.current_line] if self.current_line else [])
             for pt in line:
                 self.rubber_band.addPoint(pt, False)
         self.rubber_band.show()

@@ -6,6 +6,7 @@ from PyQt5.QtCore import Qt
 class StreamDigitizingTool(QgsMapTool):
     def __init__(self, iface, layer, layer_type):
         super().__init__(iface.mapCanvas())
+        self.number_of_items_to_update = 1
         self.iface = iface
         self.layer = layer
         self.layer_type = layer_type
@@ -18,7 +19,7 @@ class StreamDigitizingTool(QgsMapTool):
         self.rubber_band.setWidth(2)
 
     def canvasPressEvent(self, event):
-        if event.button() == Qt.LeftButton:  # Stylus down
+        if event.button() == Qt.LeftButton:
             if self.layer_type == 'point':
                 self.add_point(event)
             else:
@@ -29,12 +30,12 @@ class StreamDigitizingTool(QgsMapTool):
             self.add_vertex(event)
 
     def canvasReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton and self.layer_type != 'point':  # Stylus up & not point layer type
+        if event.button() == Qt.LeftButton and self.layer_type != 'point':
             self.finish_digitizing()
 
     def start_digitizing(self, event):
         self.stream_points = [self.toMapCoordinates(event.pos())]
-        self.rubber_band.reset(QgsWkbTypes.PolygonGeometry if self.layer_type == 'polygon' else QgsWkbTypes.LineGeometry)
+        self.rubber_band.reset(QgsWkbTypes.PolygonGeometry)
         self.digitizing = True
 
     def add_vertex(self, event):
@@ -56,6 +57,11 @@ class StreamDigitizingTool(QgsMapTool):
 
     def add_point(self, event):
         point = self.toMapCoordinates(event.pos())
+
+        # self.rubber_band.reset(QgsWkbTypes.PointGeometry)
+        self.rubber_band.addPoint(point, True)
+        self.rubber_band.show()
+
         feature = QgsFeature(self.layer.fields())
         feature.setGeometry(QgsGeometry.fromPointXY(point))
         self.pending_features.append(feature)
@@ -65,9 +71,10 @@ class StreamDigitizingTool(QgsMapTool):
             return
 
         self.layer.startEditing()
+        self.number_of_items_to_update = len(self.pending_features)
         for feature in self.pending_features:
             self.layer.addFeature(feature)
 
         self.layer.commitChanges()
-        self.rubber_band.reset()
+        self.rubber_band.reset(QgsWkbTypes.PolygonGeometry if self.layer_type == 'polygon' else QgsWkbTypes.PointGeometry)
         self.pending_features = []
