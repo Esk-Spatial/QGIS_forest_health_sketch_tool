@@ -31,10 +31,9 @@ def create_geopackage_file(path, crs=None):
     # Create layers
     point_layer = gpkg_file.CreateLayer('points', srs=spatial_ref, geom_type=ogr.wkbPoint)
     polygon_layer = gpkg_file.CreateLayer('polygons', srs=spatial_ref, geom_type=ogr.wkbPolygon)
-    line_layer = gpkg_file.CreateLayer('lines', srs=spatial_ref, geom_type=ogr.wkbLineString)
-    notes_layer = gpkg_file.CreateLayer('notes', srs=spatial_ref, geom_type=ogr.wkbMultiLineString)
+    line_layer = gpkg_file.CreateLayer('lines', srs=spatial_ref, geom_type=ogr.wkbMultiLineString)
 
-    for layer in [point_layer, polygon_layer, line_layer, notes_layer]:
+    for layer in [point_layer, polygon_layer, line_layer]:
         setup_layer_attr(layer)
 
     # Close dataset properly

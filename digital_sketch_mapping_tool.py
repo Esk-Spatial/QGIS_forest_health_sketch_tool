@@ -102,14 +102,14 @@ class DigitalSketchMappingTool:
         self.canvas = self.iface.mapCanvas()
         self.folder_location = None
         self.feature_string = ""
-        self.selected_colour = "#3dc617"
+        self.selected_colour = "#3dc6177f"
         self.point_layer = None
         self.line_layer = None
         self.polygon_layer = None
-        self.notes_layer = None
         self.plugin_name = _plugin_name_
         self.keypad_manager = KeypadManager()
         self.pressed_btn = None
+        self.attributes = None
 
         self.bing_maps_url = (
             "https://t0.tiles.virtualearth.net/tiles/a{q}.jpeg?g=685&mkt=en-us&n=z"
@@ -267,12 +267,12 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
         self.digital_sketch_widget.deletePushButton.clicked.connect(self.delete_last_feature)
 
-        self.digital_sketch_widget.linePushButton.clicked.connect(lambda: self.setup_digitizing(self.line_layer, 'line'))
-        self.digital_sketch_widget.pointPushButton.clicked.connect(lambda: self.setup_digitizing(self.point_layer, 'point'))
+        self.digital_sketch_widget.linePushButton.clicked.connect(
+            lambda: self.setup_digitizing(self.line_layer, 'line'))
+        self.digital_sketch_widget.pointPushButton.clicked.connect(
+            lambda: self.setup_digitizing(self.point_layer, 'point'))
         self.digital_sketch_widget.polygonPushButton.clicked.connect(
             lambda: self.setup_digitizing(self.polygon_layer, 'polygon'))
-
-        self.digital_sketch_widget.notesPushButton.clicked.connect(lambda: self.setup_digitizing(self.notes_layer, 'notes'))
 
     # --------------------------------------------------------------------------
 
@@ -326,7 +326,7 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def __populate_categories(self, attributes):
+    def __populate_categories(self):
         categories = self.keypad_manager.get_selected_categories()
         attr_box = self.digital_sketch_widget.categoryAttrVerticalLayout
         if not attr_box.isEmpty():
@@ -342,10 +342,10 @@ class DigitalSketchMappingTool:
                 QgsApplication.messageLog().logMessage("items greater than 3", 'DigitalSketchPlugin')
                 chunks = split_array_to_chunks(cat.items)
                 for chunk in chunks:
-                    attr_box.addWidget(self.__populate_buttons_from_list(chunk, cat.colour, attributes))
+                    attr_box.addWidget(self.__populate_buttons_from_list(chunk, cat.colour))
 
             else:
-                attr_box.addWidget(self.__populate_buttons_from_list(cat.items, cat.colour, attributes))
+                attr_box.addWidget(self.__populate_buttons_from_list(cat.items, cat.colour))
 
     # --------------------------------------------------------------------------
 
@@ -386,22 +386,18 @@ class DigitalSketchMappingTool:
         if layer_type == 'line':
             QgsApplication.messageLog().logMessage("line layer", 'DigitalSketchPlugin')
             self.enable_feature_create("Add Line Feature")
-            self.setup_stream_digitizing(layer, layer_type)
+            self.setup_stream_digitizing(layer, 'line', True)
 
         elif layer_type == 'point':
             # TODO
             QgsApplication.messageLog().logMessage("point layer", 'DigitalSketchPlugin')
             self.enable_feature_create("Add Point Feature")
+            self.setup_stream_digitizing(layer, layer_type)
 
         elif layer_type == 'polygon':
             QgsApplication.messageLog().logMessage("polygon layer", 'DigitalSketchPlugin')
             self.enable_feature_create("Add Polygon Feature")
             self.setup_stream_digitizing(layer, layer_type)
-
-        elif layer_type == 'notes':
-            QgsApplication.messageLog().logMessage("line layer", 'DigitalSketchPlugin')
-            self.enable_feature_create("Add Line Feature")
-            self.setup_stream_digitizing(layer, 'line', True)
 
         # Connect to feature added signal
         layer.featureAdded.connect(lambda fid: self.populate_attributes(fid, layer, layer_type))
@@ -430,10 +426,7 @@ class DigitalSketchMappingTool:
             self.polygon_layer.stopEditing(True)  # Save the changes
             self.iface.messageBar().pushMessage("Success", "Changes committed successfully to polygon layer!",
                                                 level=Qgis.Success)
-        if self.notes_layer.isEditable():
-            self.notes_layer.commitChanges()  # Save the changes
-            self.iface.messageBar().pushMessage("Success", "Changes committed successfully to notes layer!",
-                                                level=Qgis.Success)
+
         self.remove_map_tool()
         self.__check_for_current_selection()
 
@@ -442,9 +435,10 @@ class DigitalSketchMappingTool:
     def open_settings(self):
         QgsApplication.messageLog().logMessage("Open settings is called", 'DigitalSketchPlugin')
 
-        settings_dialog = AppSettingsDialog(self.keypad_manager)
+        settings_dialog = AppSettingsDialog(self.keypad_manager, self.attributes)
         if settings_dialog.exec_() == QDialog.Accepted:
-            self.__populate_categories(settings_dialog.get_attributes())
+            self.attributes = settings_dialog.get_attributes()
+            self.__populate_categories()
 
     # --------------------------------------------------------------------------
 
@@ -592,7 +586,6 @@ class DigitalSketchMappingTool:
         self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=points", "points", "ogr")
         self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=lines", "lines", "ogr")
         self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=polygons", "polygons", "ogr")
-        self.notes_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=lines", "notes", "ogr")
 
         self.point_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "plugin_style.qml"))
         self.polygon_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "plugin_style.qml"))
@@ -601,7 +594,6 @@ class DigitalSketchMappingTool:
         QgsProject.instance().addMapLayer(self.point_layer)
         QgsProject.instance().addMapLayer(self.line_layer)
         QgsProject.instance().addMapLayer(self.polygon_layer)
-        QgsProject.instance().addMapLayer(self.notes_layer)
 
         # TODO
         # point_tool = FeatureIdentifyTool(self.iface, self.point_layer)
@@ -637,34 +629,31 @@ class DigitalSketchMappingTool:
                 self.digital_sketch_widget.pointPushButton.setChecked(False)
             elif self.pressed_btn == 'polygon':
                 self.digital_sketch_widget.polygonPushButton.setChecked(False)
-            elif self.pressed_btn == 'notes':
-                self.digital_sketch_widget.notesPushButton.setChecked(False)
+            # elif self.pressed_btn == 'notes':
+            #     self.digital_sketch_widget.notesPushButton.setChecked(False)
 
         if selection is not  None:
             self.pressed_btn = selection
 
     # --------------------------------------------------------------------------
 
-    def __populate_buttons_from_list(self, items, colour, attributes):
+    def __populate_buttons_from_list(self, items, colour):
         layout = QHBoxLayout()
         widget = QWidget()
         item_count = len(items)
         light_colour = adjust_color(colour, 30)
-        dark_colour = adjust_color(colour, -15)
-        QgsApplication.messageLog().logMessage(f"colour: {colour}, light: {light_colour}, dark: {dark_colour}", 'DigitalSketchPlugin')
-        QgsApplication.messageLog().logMessage(f'colour: {attributes["colour"]} font {attributes["font"]}', 'DigitalSketchPlugin')
+        # dark_colour = adjust_color(colour, -15)
         for item in items:
             btn = QPushButton(item)
-            btn.setMinimumHeight(attributes["height"])
-            btn.setMaximumHeight(attributes["height"])
-            btn.setMinimumWidth(attributes["width"])
-            btn.setMaximumWidth(attributes["width"])
-            btn.setCheckable(True)
+            btn.setMinimumHeight(self.attributes["height"])
+            btn.setMaximumHeight(self.attributes["height"])
+            btn.setMinimumWidth(self.attributes["width"])
+            btn.setMaximumWidth(self.attributes["width"])
+            btn.setFont(self.attributes["font"])
             btn.setStyleSheet(f"""
                             QPushButton {{
                                 background-color: {colour};
-                                color: {attributes["colour"]};
-                                font: {attributes["font"]};
+                                color: {self.attributes["colour"]};
                                 border-radius: 5px;
                                 padding: 5px 5x;
                             }}
@@ -672,10 +661,6 @@ class DigitalSketchMappingTool:
                                 background-color: {light_colour};
                             }}
                             """)
-            # QPushButton:checked {{
-            #     border: 2px dotted black;
-            #     background-color: {dark_colour} !important;
-            # }}
             layout.addWidget(btn)
             btn.clicked.connect(lambda checked, btn_name=item: self.__button_clicked(btn_name))
             layout.setContentsMargins(2, 2, 2, 2)
@@ -686,13 +671,17 @@ class DigitalSketchMappingTool:
         #     # layout.addItem(QSpacerItem(40, 30, QSizePolicy.Expanding, QSizePolicy.Minimum))
         #     layout.insertStretch(-1,100)
 
+        # layout.insertStretch(0, 1)  # Stretch before first button
+        # layout.addStretch(1)  # Stretch after last button
+        layout.addItem(QSpacerItem(40, 30, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        layout.insertStretch(-1, 100)
         widget.setLayout(layout)
         return widget
 
     # --------------------------------------------------------------------------
 
     def __update_code_line_edit(self):
-        self.digital_sketch_widget.lineEdit.setText(self.feature_string)
+        self.digital_sketch_widget.codeLineEdit.setText(self.feature_string)
 
     # --------------------------------------------------------------------------
 
