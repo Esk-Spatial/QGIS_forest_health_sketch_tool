@@ -72,7 +72,7 @@ def get_closest_color_name(self, color):
 
     return closest_color_name if closest_color_name else color.name()  # Return hex if no match
 
-def split_array_to_chunks(items_list, chunk_size=3):
+def split_array_to_chunks(items_list, chunk_size=2):
     return [items_list[i:i + chunk_size] for i in range(0, len(items_list), chunk_size)]
 
 

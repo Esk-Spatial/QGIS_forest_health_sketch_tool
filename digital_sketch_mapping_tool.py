@@ -112,6 +112,7 @@ class DigitalSketchMappingTool:
         self.pressed_btn = None
         self.attributes = None
         self.layers_saved = 0
+        self.selected_attribute = None
 
         self.bing_maps_url = (
             "https://t0.tiles.virtualearth.net/tiles/a{q}.jpeg?g=685&mkt=en-us&n=z"
@@ -337,7 +338,7 @@ class DigitalSketchMappingTool:
 
         for cat in categories:
             QgsApplication.messageLog().logMessage(f'colour: {cat.colour}', 'DigitalSketchPlugin')
-            if len(cat.items) > 3:
+            if len(cat.items) > 2:
                 QgsApplication.messageLog().logMessage("items greater than 3", 'DigitalSketchPlugin')
                 chunks = split_array_to_chunks(cat.items)
                 for chunk in chunks:
@@ -353,7 +354,7 @@ class DigitalSketchMappingTool:
             self.feature_string = button_name
 
         elif button_name not in self.feature_string:
-            self.feature_string = f'{self.feature_string}_{button_name}'
+            self.feature_string = f'{self.feature_string}{button_name}'
 
         self.update_code_line_edit()
 
@@ -439,19 +440,29 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def delete_last_feature(self):
-        if len(self.created_layers_stack) == 0:
-            return
+        layer_type = ''
+        layer_fid = -1
+        if self.selected_attribute is not None:
+            QgsApplication.messageLog().logMessage(f"{self.selected_attribute}", 'DigitalSketchPlugin')
+            layer_type = self.selected_attribute["type"]
+            layer_fid = self.selected_attribute["fid"]
 
-        last_layer = self.created_layers_stack.pop()
+        else:
+            if len(self.created_layers_stack) == 0:
+                return
 
-        if last_layer["type"] == "line":
-            delete_feature(self.line_layer, last_layer["fid"])
+            last_layer = self.created_layers_stack.pop()
+            layer_type = last_layer["type"]
+            layer_fid = last_layer["fid"]
 
-        elif last_layer["type"] == "point":
-            delete_feature(self.point_layer, last_layer["fid"])
+        if layer_type == "line":
+            delete_feature(self.line_layer, layer_fid)
 
-        elif last_layer["type"] == "polygon":
-            delete_feature(self.polygon_layer, last_layer["fid"])
+        elif layer_type == "point":
+            delete_feature(self.point_layer, layer_fid)
+
+        elif layer_type == "polygon":
+            delete_feature(self.polygon_layer, layer_fid)
 
     # --------------------------------------------------------------------------
 
@@ -483,8 +494,12 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def remove_map_tool(self):
+        self.selected_attribute = None
         self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
-        self.iface.actionPan().trigger()
+        # self.iface.actionPan().trigger()
+        self.iface.mapCanvas().setMapTool(FeatureIdentifyTool(self.iface, self))
+        active_tool = self.iface.mapCanvas().mapTool()
+        QgsApplication.messageLog().logMessage(f"{print(active_tool)}", "DigitalSketchPlugin")
 
     # --------------------------------------------------------------------------
 
