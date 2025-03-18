@@ -275,7 +275,18 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def __load_bing_maps(self):
+    def set_folder_location(self):
+        folder = self.attributes['folder_path']
+        QgsApplication.messageLog().logMessage(f'Directory path {folder}.', 'DigitalSketchPlugin')
+        if folder:
+            self.folder_location = folder
+            self.load_bing_maps()
+            self.create_geopackage_file()
+            self.zoom_to_location()
+
+    # --------------------------------------------------------------------------
+
+    def load_bing_maps(self):
         # Load Bing Maps XYZ layer
         xyz_uri = f"type=xyz&url={self.bing_maps_url}&zmax=18&zmin=0&http-header:referer="
         bing_layer = QgsRasterLayer(xyz_uri, self.bing_layer_name, "wms")
@@ -289,7 +300,7 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def __zoom_to_location(self):
+    def zoom_to_location(self):
         self.canvas.setDestinationCrs(QgsCoordinateReferenceSystem('EPSG:3857'))
 
         # Convert location coordinates to Web Mercator
@@ -314,18 +325,7 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def __set_folder_location(self):
-        folder = self.attributes['folder_path']
-        QgsApplication.messageLog().logMessage(f'Directory path {folder}.', 'DigitalSketchPlugin')
-        if folder:
-            self.folder_location = folder
-            self.__load_bing_maps()
-            self.__create_geopackage_file()
-            self.__zoom_to_location()
-
-    # --------------------------------------------------------------------------
-
-    def __populate_categories(self):
+    def populate_categories(self):
         categories = self.keypad_manager.get_selected_categories()
         attr_box = self.digital_sketch_widget.categoryAttrVerticalLayout
         if not attr_box.isEmpty():
@@ -341,28 +341,21 @@ class DigitalSketchMappingTool:
                 QgsApplication.messageLog().logMessage("items greater than 3", 'DigitalSketchPlugin')
                 chunks = split_array_to_chunks(cat.items)
                 for chunk in chunks:
-                    attr_box.addWidget(self.__populate_buttons_from_list(chunk, cat.colour))
+                    attr_box.addWidget(self.populate_buttons_from_list(chunk, cat.colour))
 
             else:
-                attr_box.addWidget(self.__populate_buttons_from_list(cat.items, cat.colour))
+                attr_box.addWidget(self.populate_buttons_from_list(cat.items, cat.colour))
 
     # --------------------------------------------------------------------------
 
-    def __hiding_folder_control(self):
-        self.digital_sketch_widget.folderLbl.setVisible(False)
-        self.digital_sketch_widget.folderQgsFileWidget.setVisible(False)
-        self.digital_sketch_widget.setFolderPushButton.setVisible(False)
-
-    # --------------------------------------------------------------------------
-
-    def __button_clicked(self, button_name):
+    def button_clicked(self, button_name):
         if self.feature_string == "":
             self.feature_string = button_name
 
         elif button_name not in self.feature_string:
             self.feature_string = f'{self.feature_string}_{button_name}'
 
-        self.__update_code_line_edit()
+        self.update_code_line_edit()
 
         QgsApplication.messageLog().logMessage(
             f'clicked button {button_name} feature_string {self.feature_string}.', 'DigitalSketchPlugin')
@@ -372,7 +365,7 @@ class DigitalSketchMappingTool:
     def setup_digitizing(self, layer, layer_type):
         """Setup digitizing mode with automated attribute handling"""
         # Make layer active and editable
-        self.__check_for_current_selection(layer_type)
+        self.check_for_current_selection(layer_type)
         self.iface.setActiveLayer(layer)
         layer.startEditing()
 
@@ -421,7 +414,7 @@ class DigitalSketchMappingTool:
                                                 level=Qgis.Success)
 
         self.remove_map_tool()
-        self.__check_for_current_selection()
+        self.check_for_current_selection()
 
     # --------------------------------------------------------------------------
 
@@ -434,8 +427,8 @@ class DigitalSketchMappingTool:
             self.selected_colour = self.attributes['feature_colour']
             if not self.folder_location_set:
                 self.folder_location_set = True
-                self.__set_folder_location()
-            self.__populate_categories()
+                self.set_folder_location()
+            self.populate_categories()
 
     # --------------------------------------------------------------------------
 
@@ -558,10 +551,14 @@ class DigitalSketchMappingTool:
             centroid = geom.centroid().asPoint()
             lat, lon = centroid.y(), centroid.x()
 
+        colour_attr = self.selected_colour if layer_type == 'polygon' else ''
+        code_attr = self.feature_string if self.feature_string == self.get_code_txt() else self.get_code_txt()
+        QgsApplication.messageLog().logMessage(
+            f'feature_str: {self.feature_string}, code: {self.get_code_txt()}', 'DigitalSketchPlugin')
         QgsApplication.messageLog().logMessage(f'Lat: {lat}, Lon: {lon} number of feature {self.digitizing_tool.number_of_items_to_update}', 'DigitalSketchPlugin')
-        feature.setAttribute('colour', self.selected_colour)
+        feature.setAttribute('colour', colour_attr)
         feature.setAttribute('shape', layer_type)
-        feature.setAttribute('Code', f"{self.feature_string}")
+        feature.setAttribute('Code', code_attr)
         feature.setAttribute('LAT', f"{lat}")
         feature.setAttribute('LON', f"{lon}")
         feature.setAttribute('Surveyor', self.attributes['surveyor'])
@@ -571,7 +568,8 @@ class DigitalSketchMappingTool:
 
         # Update the feature
         layer.updateFeature(feature)
-        apply_symbology(layer, self.iface)
+        if layer_type == 'polygon':
+            apply_symbology(layer, self.iface)
 
         if layer.isEditable():
             QgsApplication.messageLog().logMessage('layer is editable', 'DigitalSketchPlugin')
@@ -581,12 +579,12 @@ class DigitalSketchMappingTool:
         if self.layers_saved == self.digitizing_tool.number_of_items_to_update:
             self.layers_saved = 0
             self.feature_string = ""
-            self.__update_code_line_edit()
+            self.update_code_line_edit()
             QgsApplication.messageLog().logMessage('finished updating symbology', 'DigitalSketchPlugin')
 
     # --------------------------------------------------------------------------
 
-    def __create_geopackage_file(self):
+    def create_geopackage_file(self):
         QgsApplication.messageLog().logMessage('creating new gpkg file', 'DigitalSketchPlugin')
         date_time_str = datetime.now().strftime("%d-%m-%Y_%I-%M-%p")
         gpkg_file_name = f"{date_time_str}.gpkg"
@@ -602,9 +600,9 @@ class DigitalSketchMappingTool:
         self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=lines", "lines", "ogr")
         self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=polygons", "polygons", "ogr")
 
-        self.point_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "plugin_style.qml"))
-        self.polygon_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "plugin_style.qml"))
-        self.line_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "plugin_style.qml"))
+        self.point_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "styles",  "point_style.qml"))
+        self.polygon_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "styles",  "polygon_style.qml"))
+        self.line_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "styles", "line_style.qml"))
 
         QgsProject.instance().addMapLayer(self.point_layer)
         QgsProject.instance().addMapLayer(self.line_layer)
@@ -624,7 +622,7 @@ class DigitalSketchMappingTool:
 
     #--------------------------------------------------------------------------
 
-    def  __check_for_current_selection(self, selection=None):
+    def  check_for_current_selection(self, selection=None):
         if self.pressed_btn is not None:
             QgsApplication.messageLog().logMessage(f"btn already pressed {self.pressed_btn}", 'DigitalSketchPlugin')
             # self.save_layers()
@@ -643,7 +641,7 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def __populate_buttons_from_list(self, items, colour):
+    def populate_buttons_from_list(self, items, colour):
         layout = QHBoxLayout()
         widget = QWidget()
         item_count = len(items)
@@ -668,7 +666,7 @@ class DigitalSketchMappingTool:
                             }}
                             """)
             layout.addWidget(btn)
-            btn.clicked.connect(lambda checked, btn_name=item: self.__button_clicked(btn_name))
+            btn.clicked.connect(lambda checked, btn_name=item: self.button_clicked(btn_name))
             layout.setContentsMargins(2, 2, 2, 2)
             layout.setSpacing(5)
 
@@ -686,8 +684,13 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def __update_code_line_edit(self):
+    def update_code_line_edit(self):
         self.digital_sketch_widget.codeLineEdit.setText(self.feature_string)
+
+    # --------------------------------------------------------------------------
+
+    def get_code_txt(self):
+        return self.digital_sketch_widget.codeLineEdit.text().strip()
 
     # --------------------------------------------------------------------------
 

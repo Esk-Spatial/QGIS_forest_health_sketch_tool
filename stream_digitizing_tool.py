@@ -13,7 +13,7 @@ class StreamDigitizingTool(QgsMapTool):
         self.stream_points = []
         self.pending_features = []
         self.digitizing = False
-        self.rubber_band = QgsRubberBand(self.canvas(),
+        self.rubber_band = QgsRubberBand(self.iface.mapCanvas(),
                                          QgsWkbTypes.PointGeometry if layer_type == 'point' else QgsWkbTypes.PolygonGeometry)
         self.rubber_band.setColor(Qt.red)
         self.rubber_band.setWidth(2)
