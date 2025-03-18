@@ -22,8 +22,8 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.setupUi(self)
         self.keypad_manager = keypad_manager
         keypad_manager.create_data_copy()
-        self.categoryListWidget.itemSelectionChanged.connect(self._on_category_item_selected)
-        self.elementListWidget.itemSelectionChanged.connect(self._on_element_item_selected)
+        self.categoryListWidget.itemSelectionChanged.connect(self.on_category_item_selected)
+        self.elementListWidget.itemSelectionChanged.connect(self.on_element_item_selected)
         self.selected_category = ''
         self.selected_element = ''
         self.folder_location = ''
@@ -46,7 +46,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             self.widthLineEdit.setText(f'{attributes["width"]}')
 
         self.updated_settings = False
-        self._clear_and_populate_categories()
+        self.clear_and_populate_categories()
 
         # Connect buttons to functions
         self.moveDownPadItemPushButton.clicked.connect(lambda :self.move_category("down"))
@@ -59,20 +59,20 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
         self.buttonBox.button(QDialogButtonBox.Apply).clicked.connect(self.apply_settings)
         self.buttonBox.button(QDialogButtonBox.Discard).clicked.connect(self.discard_settings)
-        self.mFontButton.changed.connect(self._font_changed)
-        self.featureColorButton.colorChanged.connect(self._feature_colour_changed)
-        self.mColorButton.colorChanged.connect(self._colour_changed)
-        self.folderQgsFileWidget.fileChanged.connect(self._set_folder_location)
+        self.mFontButton.changed.connect(self.font_changed)
+        self.featureColorButton.colorChanged.connect(self.feature_colour_changed)
+        self.mColorButton.colorChanged.connect(self.colour_changed)
+        self.folderQgsFileWidget.fileChanged.connect(self.set_folder_location)
 
     def move_category(self, direction):
         QgsApplication.messageLog().logMessage(f"move_category: {direction}", 'DigitalSketchPlugin')
         self.keypad_manager.move_category(self.selected_category,direction)
-        self._clear_and_populate_categories()
+        self.clear_and_populate_categories()
 
     def move_element(self, direction):
         QgsApplication.messageLog().logMessage(f"move_element: {direction}", 'DigitalSketchPlugin')
         self.keypad_manager.move_item(self.selected_category, self.selected_element, direction)
-        self._clear_populate_elements_list(self.selected_category)
+        self.clear_populate_elements_list(self.selected_category)
 
     def checkbox_state_changed(self, checkbox, state):
         QgsApplication.messageLog().logMessage(f"checkbox {checkbox.objectName()} state_changed: {state}", 'DigitalSketchPlugin')
@@ -88,11 +88,11 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
                 QgsApplication.messageLog().logMessage(f"accepted data {data}", 'DigitalSketchPlugin')
                 if mode == 'category':
                     self.keypad_manager.add_category(data)
-                    self._clear_and_populate_categories()
+                    self.clear_and_populate_categories()
 
                 else:
                     self.keypad_manager.add_item(self.selected_category, data)
-                    self._clear_populate_elements_list(self.selected_category)
+                    self.clear_populate_elements_list(self.selected_category)
 
     def apply_settings(self):
         QgsApplication.messageLog().logMessage("apply_settings", 'DigitalSketchPlugin')
@@ -113,7 +113,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
     def get_attributes(self):
         return self.attributes
 
-    def _clear_and_populate_categories(self):
+    def clear_and_populate_categories(self):
         self.categoryListWidget.clear()
         for pad in self.keypad_manager.data_cpy:
             QgsApplication.messageLog().logMessage(f"pad_item: {pad.category}", 'DigitalSketchPlugin')
@@ -153,7 +153,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             item.setSizeHint(widget.sizeHint())
             self.categoryListWidget.setItemWidget(item, widget)
 
-    def _on_category_item_selected(self):
+    def on_category_item_selected(self):
         selected_items = self.categoryListWidget.selectedItems()
         if selected_items:
             item = selected_items[0]  # Get the first selected item
@@ -165,9 +165,9 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
                     self.selected_category = c_box.text()
                     QgsApplication.messageLog().logMessage(f"Selected Item: {c_box.text()}, Checked: {c_box.isChecked()}", 'DigitalSketchPlugin')
                     self.padItemsGroupBox.setTitle(f'Keypad: {c_box.text()}')
-                    self._clear_populate_elements_list(c_box.text())
+                    self.clear_populate_elements_list(c_box.text())
 
-    def _clear_populate_elements_list(self, category_name):
+    def clear_populate_elements_list(self, category_name):
         self.elementListWidget.clear()
         category = next((cat for cat in self.keypad_manager.data_cpy if cat.category == category_name), None)
         if category:
@@ -206,7 +206,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
                 item.setSizeHint(widget.sizeHint())
                 self.elementListWidget.setItemWidget(item, widget)
 
-    def _on_element_item_selected(self):
+    def on_element_item_selected(self):
         QgsApplication.messageLog().logMessage(f"_on_element_item_selected", 'DigitalSketchPlugin')
         selected_items = self.elementListWidget.selectedItems()
         if selected_items:
@@ -219,19 +219,19 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
                     self.selected_element = label.text()
                     QgsApplication.messageLog().logMessage(f"Selected Item: {label.text()}", 'DigitalSketchPlugin')
 
-    def _colour_changed(self, colour):
+    def colour_changed(self, colour):
         self.colour = colour.name(QColor.HexArgb)
         QgsApplication.messageLog().logMessage(f'Colour: {self.colour}', 'DigitalSketchPlugin')
 
-    def _feature_colour_changed(self, colour):
+    def feature_colour_changed(self, colour):
         self.feature_colour = colour.name(QColor.HexArgb)
         QgsApplication.messageLog().logMessage(f'Colour: {self.colour}', 'DigitalSketchPlugin')
 
-    def _set_folder_location(self, folder):
+    def set_folder_location(self, folder):
         QgsApplication.messageLog().logMessage(f'Directory path {folder}.', 'DigitalSketchPlugin')
         if folder:
             self.folder_location = folder
 
-    def _font_changed(self):
+    def font_changed(self):
         self.font = self.mFontButton.currentFont()
         QgsApplication.messageLog().logMessage("Font updated", 'DigitalSketchPlugin')
