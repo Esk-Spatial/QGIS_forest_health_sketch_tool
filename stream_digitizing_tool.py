@@ -70,6 +70,8 @@ class StreamDigitizingTool(QgsMapTool):
     def save_feature(self, attributes):
         if not self.pending_features:
             return
+        if not self.layer.isEditable():
+            self.layer.startEditing()
 
         self.number_of_items_to_update = len(self.pending_features)
         QgsApplication.messageLog().logMessage(f'num: {self.number_of_items_to_update}', 'DigitalSketchPlugin')
