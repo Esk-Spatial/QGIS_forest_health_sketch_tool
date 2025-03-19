@@ -57,9 +57,6 @@ class MultiLineDigitizingTool(QgsMapTool):
         feature = QgsFeature(self.layer.fields())
         feature.setGeometry(QgsGeometry(multi_line))
 
-        if not self.layer.isEditable():
-            self.layer.startEditing()
-
         if self.layer.addFeature(update_feature_attributes(feature, '', attributes)):
             self.layer.commitChanges()
 

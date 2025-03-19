@@ -359,7 +359,6 @@ class DigitalSketchMappingTool:
         # Make layer active and editable
         self.check_for_current_selection(layer_type)
         self.iface.setActiveLayer(layer)
-        layer.startEditing()
         if self.digitizing_tool is not None:
             self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
 
@@ -376,7 +375,7 @@ class DigitalSketchMappingTool:
             self.setup_stream_digitizing(layer, self.polygon_tool)
 
         # Connect to feature added signal
-        layer.featureAdded.connect(lambda fid: self.populate_attributes(fid, layer, layer_type))
+        layer.featureAdded.connect(lambda fid: self.process_layer_after_adding(fid, layer, layer_type))
 
     # --------------------------------------------------------------------------
 
@@ -442,7 +441,9 @@ class DigitalSketchMappingTool:
             if len(self.created_layers_stack) == 0:
                 return
 
+            QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
             last_layer = self.created_layers_stack.pop()
+            QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
             layer_type = last_layer["type"]
             layer_fid = last_layer["fid"]
 
@@ -494,12 +495,13 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def populate_attributes(self, fid, layer, layer_type):
+    def process_layer_after_adding(self, fid, layer, layer_type):
         """Automatically populate attributes for new features"""
         QgsApplication.messageLog().logMessage(f'fid: {fid}', 'DigitalSketchPlugin')
 
         self.layers_saved += 1
-        if fid > 0:
+        already_exist = {"type": layer_type, "fid": fid} in self.created_layers_stack
+        if fid > 0 and not already_exist:
             self.created_layers_stack.append({"type": layer_type, "fid": fid})
 
         if layer_type == 'polygons':

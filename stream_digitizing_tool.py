@@ -71,11 +71,12 @@ class StreamDigitizingTool(QgsMapTool):
         if not self.pending_features:
             return
 
-        self.layer.startEditing()
         self.number_of_items_to_update = len(self.pending_features)
         QgsApplication.messageLog().logMessage(f'num: {self.number_of_items_to_update}', 'DigitalSketchPlugin')
         for feature in self.pending_features:
             self.layer.addFeature(update_feature_attributes(feature, self.layer_type, attributes))
+
         self.pending_features = []
         self.layer.commitChanges()
+
         self.rubber_band.reset(QgsWkbTypes.PolygonGeometry if self.layer_type == 'polygons' else QgsWkbTypes.PointGeometry)
