@@ -3,6 +3,9 @@ from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.core import QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry, QgsApplication
 from PyQt5.QtCore import Qt
 
+from helper import update_feature_attributes
+
+
 class StreamDigitizingTool(QgsMapTool):
     def __init__(self, iface, layer, layer_type):
         super().__init__(iface.mapCanvas())
@@ -14,13 +17,13 @@ class StreamDigitizingTool(QgsMapTool):
         self.pending_features = []
         self.digitizing = False
         self.rubber_band = QgsRubberBand(self.iface.mapCanvas(),
-                                         QgsWkbTypes.PointGeometry if layer_type == 'point' else QgsWkbTypes.PolygonGeometry)
+                                         QgsWkbTypes.PointGeometry if layer_type == 'points' else QgsWkbTypes.PolygonGeometry)
         self.rubber_band.setColor(Qt.red)
         self.rubber_band.setWidth(2)
 
     def canvasPressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            if self.layer_type == 'point':
+            if self.layer_type == 'points':
                 self.add_point(event)
             else:
                 self.start_digitizing(event)
@@ -30,7 +33,7 @@ class StreamDigitizingTool(QgsMapTool):
             self.add_vertex(event)
 
     def canvasReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton and self.layer_type != 'point':
+        if event.button() == Qt.LeftButton and self.layer_type != 'points':
             self.finish_digitizing()
 
     def start_digitizing(self, event):
@@ -48,7 +51,7 @@ class StreamDigitizingTool(QgsMapTool):
         if not self.stream_points:
             return
         self.digitizing = False
-        geom = QgsGeometry.fromPolylineXY(self.stream_points) if self.layer_type == 'line' else QgsGeometry.fromPolygonXY([self.stream_points])
+        geom = QgsGeometry.fromPolygonXY([self.stream_points])
 
         feature = QgsFeature(self.layer.fields())
         feature.setGeometry(geom)
@@ -57,8 +60,6 @@ class StreamDigitizingTool(QgsMapTool):
 
     def add_point(self, event):
         point = self.toMapCoordinates(event.pos())
-
-        # self.rubber_band.reset(QgsWkbTypes.PointGeometry)
         self.rubber_band.addPoint(point, True)
         self.rubber_band.show()
 
@@ -66,15 +67,15 @@ class StreamDigitizingTool(QgsMapTool):
         feature.setGeometry(QgsGeometry.fromPointXY(point))
         self.pending_features.append(feature)
 
-    def save_feature(self):
+    def save_feature(self, attributes):
         if not self.pending_features:
             return
 
         self.layer.startEditing()
         self.number_of_items_to_update = len(self.pending_features)
+        QgsApplication.messageLog().logMessage(f'num: {self.number_of_items_to_update}', 'DigitalSketchPlugin')
         for feature in self.pending_features:
-            self.layer.addFeature(feature)
-
-        self.layer.commitChanges()
-        self.rubber_band.reset(QgsWkbTypes.PolygonGeometry if self.layer_type == 'polygon' else QgsWkbTypes.PointGeometry)
+            self.layer.addFeature(update_feature_attributes(feature, self.layer_type, attributes))
         self.pending_features = []
+        self.layer.commitChanges()
+        self.rubber_band.reset(QgsWkbTypes.PolygonGeometry if self.layer_type == 'polygons' else QgsWkbTypes.PointGeometry)

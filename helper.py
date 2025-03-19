@@ -1,4 +1,5 @@
 import datetime
+from pyexpat import features
 
 try:
     from osgeo import ogr
@@ -98,3 +99,24 @@ def get_current_date():
 
 def get_current_time():
     return datetime.datetime.now().strftime('%X')
+
+def update_feature_attributes(feature, layer_type, attributes):
+    geom = feature.geometry()
+    if layer_type == 'points':
+        point = geom.asPoint()
+        lat, lon = point.y(), point.x()
+    else:
+        centroid = geom.centroid().asPoint()
+        lat, lon = centroid.y(), centroid.x()
+    colour_attr = attributes['colour'] if layer_type == 'polygons' else ''
+    feature.setAttribute('colour', colour_attr)
+    feature.setAttribute('shape', layer_type)
+    feature.setAttribute('Code', attributes['code'])
+    feature.setAttribute('LAT', f"{lat}")
+    feature.setAttribute('LON', f"{lon}")
+    feature.setAttribute('Surveyor', attributes['surveyor'])
+    feature.setAttribute('Type', attributes['type_txt'])
+    feature.setAttribute('Date', get_current_date())
+    feature.setAttribute('Time', get_current_time())
+
+    return feature

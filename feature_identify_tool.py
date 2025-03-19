@@ -26,6 +26,6 @@ class FeatureIdentifyTool(QgsMapTool):
             layer = result.mLayer  # Corresponding layer
             fid = feature.id()
             # attributes = feature.attributes()
-            self.tool.selected_attribute = dict(fid=fid, type=layer.name())
+            self.tool.selected_attribute = dict(type=layer.name(), fid=fid)
 
             QgsApplication.messageLog().logMessage(f"Layer: {layer.name()}, Feature ID: {fid}", "DigitalSketchPlugin")

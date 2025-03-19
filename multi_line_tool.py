@@ -2,6 +2,9 @@ from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.core import QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry, QgsMultiLineString, QgsLineString
 from PyQt5.QtCore import Qt
 
+from helper import update_feature_attributes
+
+
 class MultiLineDigitizingTool(QgsMapTool):
     def __init__(self, iface, layer):
         super().__init__(iface.mapCanvas())
@@ -11,7 +14,7 @@ class MultiLineDigitizingTool(QgsMapTool):
         self.stylus_down = False
         self.current_line = []
         self.multi_line_segments = []  # Stores all individual lines
-        self.rubber_band = QgsRubberBand(self.iface.mapCanvas(), False) # QgsWkbTypes.LineGeometry
+        self.rubber_band = QgsRubberBand(self.iface.mapCanvas(), QgsWkbTypes.LineGeometry) # QgsWkbTypes.LineGeometry
         self.rubber_band.setColor(Qt.red)
         self.rubber_band.setWidth(2)
 
@@ -45,7 +48,7 @@ class MultiLineDigitizingTool(QgsMapTool):
 
         self.rubber_band.setToGeometry(QgsGeometry(multi_line), None)
 
-    def save_feature(self):
+    def save_feature(self, attributes):
         """Saves the drawn MultiLineString to the layer"""
         if not self.multi_line_segments:
             return
@@ -57,7 +60,7 @@ class MultiLineDigitizingTool(QgsMapTool):
         if not self.layer.isEditable():
             self.layer.startEditing()
 
-        if self.layer.addFeature(feature):
+        if self.layer.addFeature(update_feature_attributes(feature, '', attributes)):
             self.layer.commitChanges()
 
         else:
