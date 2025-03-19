@@ -21,6 +21,7 @@
  *                                                                         *
  ***************************************************************************/
 """
+import traceback
 from collections import deque
 
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QVariant
@@ -28,7 +29,7 @@ from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QPushButton, QVBoxLayout, QFileDialog, QDialog, QWidget, QHBoxLayout, QSpacerItem, QSizePolicy
 from qgis.core import QgsApplication, QgsFields, QgsCoordinateReferenceSystem, QgsVectorFileWriter, QgsWkbTypes, QgsVectorLayer, QgsProject, QgsRasterLayer, QgsPointXY, QgsCoordinateTransform, QgsRectangle, QgsField
 from datetime import datetime
-from helper import create_geopackage_file, split_array_to_chunks, adjust_color, get_current_date, get_current_time
+from helper import create_geopackage_file, split_array_to_chunks, adjust_color
 from qgis.core import QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer, QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis
 from PyQt5.QtWidgets import QWidgetAction, QToolButton
 
@@ -49,7 +50,7 @@ try:
 except ImportError:
     import ogr
 
-_plugin_name_ = "app_tester"
+_plugin_name_ = "digital_sketch_mapping_tool"
 _plugin_directory_ = os.path.dirname(__file__)
 
 def apply_symbology(layer, iface):
@@ -68,21 +69,8 @@ def apply_symbology(layer, iface):
 
     renderer = QgsCategorizedSymbolRenderer("colour", categories)
     layer.setRenderer(renderer)
-
-    label_settings = QgsPalLayerSettings()
-    label_settings.fieldName = "Code"
-    label_settings.enabled = True
-    layer.setLabeling(QgsVectorLayerSimpleLabeling(label_settings))
-
     layer.triggerRepaint()
     iface.mapCanvas().refresh()
-
-
-def delete_feature(layer, fid):
-    layer.startEditing()
-    layer.deleteFeature(fid)
-    layer.commitChanges()
-
 
 class DigitalSketchMappingTool:
     """QGIS Plugin Implementation."""
@@ -112,6 +100,10 @@ class DigitalSketchMappingTool:
         self.pressed_btn = None
         self.attributes = None
         self.layers_saved = 0
+        self.selected_attribute = None
+        self.multiline_tool = None
+        self.polygon_tool = None
+        self.point_tool = None
 
         self.bing_maps_url = (
             "https://t0.tiles.virtualearth.net/tiles/a{q}.jpeg?g=685&mkt=en-us&n=z"
@@ -264,14 +256,14 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.savePushButton.clicked.connect(self.save_layers)
         self.digital_sketch_widget.settingPushButton.clicked.connect(self.open_settings)
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
-        self.digital_sketch_widget.deletePushButton.clicked.connect(self.delete_last_feature)
+        self.digital_sketch_widget.deletePushButton.clicked.connect(self.remove_feature)
 
         self.digital_sketch_widget.linePushButton.clicked.connect(
-            lambda: self.setup_digitizing(self.line_layer, 'line'))
+            lambda: self.setup_digitizing(self.line_layer, 'lines'))
         self.digital_sketch_widget.pointPushButton.clicked.connect(
-            lambda: self.setup_digitizing(self.point_layer, 'point'))
+            lambda: self.setup_digitizing(self.point_layer, 'points'))
         self.digital_sketch_widget.polygonPushButton.clicked.connect(
-            lambda: self.setup_digitizing(self.polygon_layer, 'polygon'))
+            lambda: self.setup_digitizing(self.polygon_layer, 'polygons'))
 
     # --------------------------------------------------------------------------
 
@@ -337,7 +329,7 @@ class DigitalSketchMappingTool:
 
         for cat in categories:
             QgsApplication.messageLog().logMessage(f'colour: {cat.colour}', 'DigitalSketchPlugin')
-            if len(cat.items) > 3:
+            if len(cat.items) > 2:
                 QgsApplication.messageLog().logMessage("items greater than 3", 'DigitalSketchPlugin')
                 chunks = split_array_to_chunks(cat.items)
                 for chunk in chunks:
@@ -353,7 +345,7 @@ class DigitalSketchMappingTool:
             self.feature_string = button_name
 
         elif button_name not in self.feature_string:
-            self.feature_string = f'{self.feature_string}_{button_name}'
+            self.feature_string = f'{self.feature_string}{button_name}'
 
         self.update_code_line_edit()
 
@@ -367,26 +359,23 @@ class DigitalSketchMappingTool:
         # Make layer active and editable
         self.check_for_current_selection(layer_type)
         self.iface.setActiveLayer(layer)
-        layer.startEditing()
+        if self.digitizing_tool is not None:
+            self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
 
-        if layer_type == 'line':
-            QgsApplication.messageLog().logMessage("line layer", 'DigitalSketchPlugin')
+        if layer_type == 'lines':
             self.enable_feature_create("Add Line Feature")
-            self.setup_stream_digitizing(layer, 'line', True)
+            self.setup_stream_digitizing(layer, self.multiline_tool)
 
-        elif layer_type == 'point':
-            # TODO
-            QgsApplication.messageLog().logMessage("point layer", 'DigitalSketchPlugin')
+        elif layer_type == 'points':
             self.enable_feature_create("Add Point Feature")
-            self.setup_stream_digitizing(layer, layer_type)
+            self.setup_stream_digitizing(layer, self.point_tool)
 
-        elif layer_type == 'polygon':
-            QgsApplication.messageLog().logMessage("polygon layer", 'DigitalSketchPlugin')
+        elif layer_type == 'polygons':
             self.enable_feature_create("Add Polygon Feature")
-            self.setup_stream_digitizing(layer, layer_type)
+            self.setup_stream_digitizing(layer, self.polygon_tool)
 
         # Connect to feature added signal
-        layer.featureAdded.connect(lambda fid: self.populate_attributes(fid, layer, layer_type))
+        layer.featureAdded.connect(lambda fid: self.process_layer_after_adding(fid, layer, layer_type))
 
     # --------------------------------------------------------------------------
 
@@ -395,21 +384,18 @@ class DigitalSketchMappingTool:
         if self.point_layer.isEditable():
             QgsApplication.messageLog().logMessage("Point layer is editable", 'DigitalSketchPlugin')
             self.point_layer.commitChanges()  # Save the changes
-            self.point_layer.stopEditing(True)  # Save the changes
             self.iface.messageBar().pushMessage("Success", "Changes committed successfully to point layer!",
                                                 level=Qgis.Success)
 
         if self.line_layer.isEditable():
             QgsApplication.messageLog().logMessage("Line layer is editable", 'DigitalSketchPlugin')
             self.line_layer.commitChanges()  # Save the changes
-            self.line_layer.stopEditing(True)  # Save the changes
             self.iface.messageBar().pushMessage("Success", "Changes committed successfully to line layer!",
                                                 level=Qgis.Success)
 
         if self.polygon_layer.isEditable():
             QgsApplication.messageLog().logMessage("Polygon layer is editable", 'DigitalSketchPlugin')
             self.polygon_layer.commitChanges()  # Save the changes
-            self.polygon_layer.stopEditing(True)  # Save the changes
             self.iface.messageBar().pushMessage("Success", "Changes committed successfully to polygon layer!",
                                                 level=Qgis.Success)
 
@@ -434,24 +420,49 @@ class DigitalSketchMappingTool:
 
     def done_digitizing(self):
         QgsApplication.messageLog().logMessage("Done Digitizing is called", 'DigitalSketchPlugin')
-        self.digitizing_tool.save_feature()
+        code_attr = self.feature_string if self.feature_string == self.get_code_txt() else self.get_code_txt()
+        attributes = dict(colour=self.selected_colour, code=code_attr, surveyor=self.attributes['surveyor'],
+                          type_txt=self.attributes['type_txt'])
+        self.digitizing_tool.save_feature(attributes)
 
     # --------------------------------------------------------------------------
 
-    def delete_last_feature(self):
-        if len(self.created_layers_stack) == 0:
-            return
+    def remove_feature(self):
+        if self.selected_attribute is not None:
+            QgsApplication.messageLog().logMessage(f"{self.selected_attribute}", 'DigitalSketchPlugin')
+            layer_type = self.selected_attribute["type"]
+            layer_fid = self.selected_attribute["fid"]
 
-        last_layer = self.created_layers_stack.pop()
+            QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
+            self.created_layers_stack.remove({"type": layer_type, "fid": layer_fid})
+            QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
 
-        if last_layer["type"] == "line":
-            delete_feature(self.line_layer, last_layer["fid"])
+        else:
+            if len(self.created_layers_stack) == 0:
+                return
 
-        elif last_layer["type"] == "point":
-            delete_feature(self.point_layer, last_layer["fid"])
+            QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
+            last_layer = self.created_layers_stack.pop()
+            QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
+            layer_type = last_layer["type"]
+            layer_fid = last_layer["fid"]
 
-        elif last_layer["type"] == "polygon":
-            delete_feature(self.polygon_layer, last_layer["fid"])
+        if layer_type == "lines":
+            self.delete_feature(self.line_layer, layer_fid)
+
+        elif layer_type == "points":
+            self.delete_feature(self.point_layer, layer_fid)
+
+        elif layer_type == "polygons":
+            self.delete_feature(self.polygon_layer, layer_fid)
+
+    # --------------------------------------------------------------------------
+
+    def delete_feature(self, layer, fid):
+        layer.startEditing()
+        layer.deleteFeature(fid)
+        layer.commitChanges()
+        self.selected_attribute = None
 
     # --------------------------------------------------------------------------
 
@@ -466,121 +477,40 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def setup_stream_digitizing(self, layer, layer_type, is_multipart=False):
+    def setup_stream_digitizing(self, layer, tool):
         """Setup digitizing mode using stylus events"""
         self.iface.setActiveLayer(layer)
         layer.startEditing()
-
-        if is_multipart:
-            QgsApplication.messageLog().logMessage("multipart", 'DigitalSketchPlugin')
-            self.digitizing_tool = MultiLineDigitizingTool(self.iface, layer)
-        else:
-            QgsApplication.messageLog().logMessage("single ", 'DigitalSketchPlugin')
-            self.digitizing_tool = StreamDigitizingTool(self.iface, layer, layer_type)
-
+        self.digitizing_tool = tool
         self.iface.mapCanvas().setMapTool(self.digitizing_tool)
 
     # --------------------------------------------------------------------------
 
     def remove_map_tool(self):
+        self.selected_attribute = None
         self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
-        self.iface.actionPan().trigger()
+        # self.iface.actionPan().trigger() TODO
+        self.iface.mapCanvas().setMapTool(FeatureIdentifyTool(self.iface, self))
+        active_tool = self.iface.mapCanvas().mapTool()
 
     # --------------------------------------------------------------------------
 
-    def enable_stream_digitize(self):
-        toolbar = self.iface.digitizeToolBar()
-        QgsApplication.messageLog().logMessage(f"Toolbar found: {toolbar.objectName()}", 'DigitalSketchPlugin')
-
-        action_triggered = False
-        for action in toolbar.actions():
-            if action_triggered:
-                break
-            else:
-                if isinstance(action, QWidgetAction):  # If it's a QWidgetAction, get its widget
-                    widget = action.defaultWidget()
-                    if widget:
-                        action_text = widget.text() if hasattr(widget, "text") else "[No Text]"
-                        QgsApplication.messageLog().logMessage(
-                            f"QWidgetAction - Text: {action_text} is menu {isinstance(widget, QToolButton)}",
-                            'DigitalSketchPlugin')
-
-                        if "Digitiz" in action_text:
-                            sub_items = widget.menu()
-                            if sub_items:
-                                sub_actions = sub_items.actions()
-                                for inner_action in sub_actions:
-                                    # Look for the "Stream Digitizing" action in the toolbar
-                                    QgsApplication.messageLog().logMessage(f"Action - Text: {inner_action.text()}",
-                                                                           'DigitalSketchPlugin')
-                                    if inner_action.text() == "Stream Digitizing" and not inner_action.isChecked():
-                                        inner_action.trigger()
-                                        inner_action.toggle()
-                                        action_triggered = True
-                                        break
-
-                                    elif inner_action.text() == "Stream Digitizing" and inner_action.isChecked():
-                                        action_triggered = True
-                                        break
-
-                                    elif inner_action.isChecked():
-                                        QgsApplication.messageLog().logMessage(
-                                            f"Action - is checked: {inner_action.text()}",
-                                            'DigitalSketchPlugin')
-
-    # --------------------------------------------------------------------------
-
-    def populate_attributes(self, fid, layer, layer_type):
+    def process_layer_after_adding(self, fid, layer, layer_type):
         """Automatically populate attributes for new features"""
-        feature = layer.getFeature(fid)
+        QgsApplication.messageLog().logMessage(f'fid: {fid}', 'DigitalSketchPlugin')
+
         self.layers_saved += 1
-        self.created_layers_stack.append({"type": layer_type, "fid": fid})
+        already_exist = {"type": layer_type, "fid": fid} in self.created_layers_stack
+        if fid > 0 and not already_exist:
+            self.created_layers_stack.append({"type": layer_type, "fid": fid})
 
-        # if layer_type == 'note':
-        #     feature.setAttribute('colour', "#FF0000")
-        #     feature.setAttribute('Code', "")
-        #
-        # else:
-        lat = None
-        lon = None
-        geom = feature.geometry()
-        if layer_type == 'point':
-            point = geom.asPoint()
-            lat, lon = point.y(), point.x()
-        else:
-            centroid = geom.centroid().asPoint()
-            lat, lon = centroid.y(), centroid.x()
-
-        colour_attr = self.selected_colour if layer_type == 'polygon' else ''
-        code_attr = self.feature_string if self.feature_string == self.get_code_txt() else self.get_code_txt()
-        QgsApplication.messageLog().logMessage(
-            f'feature_str: {self.feature_string}, code: {self.get_code_txt()}', 'DigitalSketchPlugin')
-        QgsApplication.messageLog().logMessage(f'Lat: {lat}, Lon: {lon} number of feature {self.digitizing_tool.number_of_items_to_update}', 'DigitalSketchPlugin')
-        feature.setAttribute('colour', colour_attr)
-        feature.setAttribute('shape', layer_type)
-        feature.setAttribute('Code', code_attr)
-        feature.setAttribute('LAT', f"{lat}")
-        feature.setAttribute('LON', f"{lon}")
-        feature.setAttribute('Surveyor', self.attributes['surveyor'])
-        feature.setAttribute('Type', self.attributes['type_txt'])
-        feature.setAttribute('Date', get_current_date())
-        feature.setAttribute('Time', get_current_time())
-
-        # Update the feature
-        layer.updateFeature(feature)
-        if layer_type == 'polygon':
+        if layer_type == 'polygons':
             apply_symbology(layer, self.iface)
-
-        if layer.isEditable():
-            QgsApplication.messageLog().logMessage('layer is editable', 'DigitalSketchPlugin')
-            #layer.commitChanges()
-            #layer.startEditing()
 
         if self.layers_saved == self.digitizing_tool.number_of_items_to_update:
             self.layers_saved = 0
             self.feature_string = ""
             self.update_code_line_edit()
-            QgsApplication.messageLog().logMessage('finished updating symbology', 'DigitalSketchPlugin')
 
     # --------------------------------------------------------------------------
 
@@ -608,15 +538,9 @@ class DigitalSketchMappingTool:
         QgsProject.instance().addMapLayer(self.line_layer)
         QgsProject.instance().addMapLayer(self.polygon_layer)
 
-        # TODO
-        # point_tool = FeatureIdentifyTool(self.iface, self.point_layer)
-        # self.iface.mapCanvas().setMapTool(point_tool)
-
-        # polygon_tool = FeatureIdentifyTool(self.iface)
-        # self.iface.mapCanvas().setMapTool(polygon_tool)
-
-        # line_tool = FeatureIdentifyTool(self.iface, self.line_layer)
-        # self.iface.mapCanvas().setMapTool(line_tool)
+        self.point_tool = StreamDigitizingTool(self.iface, self.point_layer, 'points')
+        self.polygon_tool = StreamDigitizingTool(self.iface, self.polygon_layer, 'polygons')
+        self.multiline_tool = MultiLineDigitizingTool(self.iface, self.line_layer)
 
         self.canvas.refresh()
 
@@ -627,14 +551,12 @@ class DigitalSketchMappingTool:
             QgsApplication.messageLog().logMessage(f"btn already pressed {self.pressed_btn}", 'DigitalSketchPlugin')
             # self.save_layers()
 
-            if self.pressed_btn == 'line':
+            if self.pressed_btn == 'lines':
                 self.digital_sketch_widget.linePushButton.setChecked(False)
-            elif self.pressed_btn == 'point':
+            elif self.pressed_btn == 'points':
                 self.digital_sketch_widget.pointPushButton.setChecked(False)
-            elif self.pressed_btn == 'polygon':
+            elif self.pressed_btn == 'polygons':
                 self.digital_sketch_widget.polygonPushButton.setChecked(False)
-            # elif self.pressed_btn == 'notes':
-            #     self.digital_sketch_widget.notesPushButton.setChecked(False)
 
         if selection is not  None:
             self.pressed_btn = selection
@@ -644,9 +566,7 @@ class DigitalSketchMappingTool:
     def populate_buttons_from_list(self, items, colour):
         layout = QHBoxLayout()
         widget = QWidget()
-        item_count = len(items)
         light_colour = adjust_color(colour, 30)
-        # dark_colour = adjust_color(colour, -15)
         for item in items:
             btn = QPushButton(item)
             btn.setMinimumHeight(self.attributes["height"])
@@ -670,13 +590,6 @@ class DigitalSketchMappingTool:
             layout.setContentsMargins(2, 2, 2, 2)
             layout.setSpacing(5)
 
-        # if item_count < 3:
-        #     QgsApplication.messageLog().logMessage("Setting item_cefefeount space l121alala", 'DigitalSketchPlugin')
-        #     # layout.addItem(QSpacerItem(40, 30, QSizePolicy.Expanding, QSizePolicy.Minimum))
-        #     layout.insertStretch(-1,100)
-
-        # layout.insertStretch(0, 1)  # Stretch before first button
-        # layout.addStretch(1)  # Stretch after last button
         layout.addItem(QSpacerItem(40, 30, QSizePolicy.Expanding, QSizePolicy.Minimum))
         layout.insertStretch(-1, 100)
         widget.setLayout(layout)

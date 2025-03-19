@@ -1,29 +1,31 @@
 from qgis.core import QgsProject, QgsApplication
-from qgis.gui import QgsMapTool, QgsMapMouseEvent
+from qgis.gui import QgsMapTool, QgsMapMouseEvent, QgsMapToolIdentify
 from PyQt5.QtCore import Qt
 
 class FeatureIdentifyTool(QgsMapTool):
-    def __init__(self, iface):
+    def __init__(self, iface, sketch_tool):
         super().__init__(iface.mapCanvas())
         self.iface = iface
         self.canvas = iface.mapCanvas()
         self.setCursor(Qt.ArrowCursor)  # Keep normal cursor
-        self.canvas.setMapTool(self)  # Activate the tool
+        self.tool = sketch_tool
 
     def canvasReleaseEvent(self, event: QgsMapMouseEvent):
         """Detects feature click in pan mode"""
         QgsApplication.messageLog().logMessage("FeatureIdentifyTool triggered", "DigitalSketchPlugin")
-
+        identify_tool = QgsMapToolIdentify(self.iface.mapCanvas())
         layers = QgsProject.instance().mapLayers().values()  # Get all layers
-        results = self.iface.mapCanvas().identify(event, layers, QgsMapTool.TopDownStop)
+        results = identify_tool.identify(event.x(), event.y(), layers, QgsMapToolIdentify.TopDownStopAtFirst)
 
         if not results:
             QgsApplication.messageLog().logMessage("No feature clicked", "DigitalSketchPlugin")
             return
 
-        feature = results[0].mFeature  # First identified feature
-        layer = results[0].mLayer  # Corresponding layer
-        fid = feature.id()
-        attributes = feature.attributes()
+        for result in results:
+            feature = result.mFeature  # First identified feature
+            layer = result.mLayer  # Corresponding layer
+            fid = feature.id()
+            # attributes = feature.attributes()
+            self.tool.selected_attribute = dict(type=layer.name(), fid=fid)
 
-        QgsApplication.messageLog().logMessage(f"Clicked on Layer: {layer.name()}, Feature ID: {fid}, Attributes: {attributes}", "DigitalSketchPlugin")
+            QgsApplication.messageLog().logMessage(f"Layer: {layer.name()}, Feature ID: {fid}", "DigitalSketchPlugin")
