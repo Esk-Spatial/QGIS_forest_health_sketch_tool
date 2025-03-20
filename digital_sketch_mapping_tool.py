@@ -24,14 +24,18 @@
 import traceback
 from collections import deque
 
+from PyQt5.QtWidgets import QRadioButton
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QVariant
 from qgis.PyQt.QtGui import QIcon, QColor
-from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QPushButton, QVBoxLayout, QFileDialog, QDialog, QWidget, QHBoxLayout, QSpacerItem, QSizePolicy
-from qgis.core import QgsApplication, QgsFields, QgsCoordinateReferenceSystem, QgsVectorFileWriter, QgsWkbTypes, QgsVectorLayer, QgsProject, QgsRasterLayer, QgsPointXY, QgsCoordinateTransform, QgsRectangle, QgsField
+from qgis.PyQt.QtWidgets import (QAction, QFileDialog, QMessageBox, QPushButton, QVBoxLayout, QFileDialog, QDialog,
+                                 QWidget, QHBoxLayout, QSpacerItem, QSizePolicy)
+from qgis.core import (QgsApplication, QgsFields, QgsCoordinateReferenceSystem, QgsVectorFileWriter, QgsWkbTypes,
+                       QgsVectorLayer, QgsProject, QgsRasterLayer, QgsPointXY, QgsCoordinateTransform, QgsRectangle,
+                       QgsField, QgsGpsConnection)
 from datetime import datetime
 from helper import create_geopackage_file, split_array_to_chunks, adjust_color
-from qgis.core import QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer, QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis
-from PyQt5.QtWidgets import QWidgetAction, QToolButton
+from qgis.core import (QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer,
+                       QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis)
 
 from stream_digitizing_tool import StreamDigitizingTool
 from multi_line_tool import MultiLineDigitizingTool
@@ -357,21 +361,20 @@ class DigitalSketchMappingTool:
     def setup_digitizing(self, layer, layer_type):
         """Setup digitizing mode with automated attribute handling"""
         # Make layer active and editable
+        if layer is None:
+            return
         self.check_for_current_selection(layer_type)
         self.iface.setActiveLayer(layer)
         if self.digitizing_tool is not None:
             self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
 
         if layer_type == 'lines':
-            self.enable_feature_create("Add Line Feature")
             self.setup_stream_digitizing(layer, self.multiline_tool)
 
         elif layer_type == 'points':
-            self.enable_feature_create("Add Point Feature")
             self.setup_stream_digitizing(layer, self.point_tool)
 
         elif layer_type == 'polygons':
-            self.enable_feature_create("Add Polygon Feature")
             self.setup_stream_digitizing(layer, self.polygon_tool)
 
         # Connect to feature added signal
@@ -411,7 +414,7 @@ class DigitalSketchMappingTool:
         if settings_dialog.exec_() == QDialog.Accepted:
             self.attributes = settings_dialog.get_attributes()
             self.selected_colour = self.attributes['feature_colour']
-            if not self.folder_location_set:
+            if not self.folder_location_set and self.attributes['folder_path'] is not None:
                 self.folder_location_set = True
                 self.set_folder_location()
             self.populate_categories()
@@ -466,19 +469,21 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def enable_feature_create(self, action_name):
-        toolbar = self.iface.digitizeToolBar()
-        QgsApplication.messageLog().logMessage(f"Toolbar found: {toolbar.objectName()}", 'DigitalSketchPlugin')
-
-        # for action in toolbar.actions():
-        #     action_text = action.text() if action.text() else "[No Text]"
-        #     if action_text == action_name:
-        #         action.trigger()
-
-    # --------------------------------------------------------------------------
-
     def setup_stream_digitizing(self, layer, tool):
         """Setup digitizing mode using stylus events"""
+        gps = self.iface.mainWindow().findChild(QWidget, 'QgsGpsInformationWidgetBase')
+        QgsApplication.messageLog().logMessage(f" {gps}.", 'DigitalSketchPlugin')
+        never_center = gps.findChild(QRadioButton, "radNeverRecenter")
+        when_leaving = gps.findChild(QRadioButton, "radRecenterWhenNeeded")
+
+        if never_center:
+            never_center.click()
+            QgsApplication.messageLog().logMessage(f" found {never_center.text()}.", 'DigitalSketchPlugin')
+
+        if when_leaving:
+            QgsApplication.messageLog().logMessage(f" found {when_leaving.text()}.", 'DigitalSketchPlugin')
+
+        self.iface.mapCanvas().refresh()
         self.iface.setActiveLayer(layer)
         layer.startEditing()
         self.digitizing_tool = tool
@@ -489,9 +494,7 @@ class DigitalSketchMappingTool:
     def remove_map_tool(self):
         self.selected_attribute = None
         self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
-        # self.iface.actionPan().trigger() TODO
         self.iface.mapCanvas().setMapTool(FeatureIdentifyTool(self.iface, self))
-        active_tool = self.iface.mapCanvas().mapTool()
 
     # --------------------------------------------------------------------------
 
