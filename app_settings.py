@@ -26,7 +26,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.elementListWidget.itemSelectionChanged.connect(self.on_element_item_selected)
         self.selected_category = ''
         self.selected_element = ''
-        self.folder_location = ''
+        self.folder_location = None
         self.colour = self.mColorButton.color().name(QColor.HexArgb)
         self.feature_colour = self.featureColorButton.color().name(QColor.HexArgb)
         self.font = self.mFontButton.currentFont()
@@ -35,8 +35,9 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.attributes = None
 
         if attributes is not None:
+            self.folder_location = attributes["folder_path"]
             self.folderQgsFileWidget.setFilePath(attributes["folder_path"])
-            self.folderQgsFileWidget.setReadOnly(True)
+            self.change_folder_ctrl_to_readonly(attributes["folder_path"])
             self.featureColorButton.setColor(QColor(attributes["feature_colour"]))
             self.heightLineEdit.setText(attributes["surveyor"])
             self.heightLineEdit.setText(attributes["type_txt"])
@@ -97,7 +98,6 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
     def apply_settings(self):
         QgsApplication.messageLog().logMessage("apply_settings", 'DigitalSketchPlugin')
         self.updated_settings = True
-        self.folderQgsFileWidget.setReadOnly(True)
         self.attributes = dict(folder_path=self.folder_location, feature_colour=self.feature_colour,
                                surveyor=self.surveyourLineEdit.text().strip(), type_txt=self.typeLineEdit.text().strip(),
                                font=self.font, colour=self.colour, height=float(self.heightLineEdit.text().strip()),
@@ -116,7 +116,6 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
     def clear_and_populate_categories(self):
         self.categoryListWidget.clear()
         for pad in self.keypad_manager.data_cpy:
-            QgsApplication.messageLog().logMessage(f"pad_item: {pad.category}", 'DigitalSketchPlugin')
             item = QListWidgetItem(self.categoryListWidget)
             widget = QWidget()
             layout = QHBoxLayout()
@@ -172,7 +171,6 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         category = next((cat for cat in self.keypad_manager.data_cpy if cat.category == category_name), None)
         if category:
             for element in category.items:
-                QgsApplication.messageLog().logMessage(f"pad_item: {element}", 'DigitalSketchPlugin')
                 item = QListWidgetItem(self.elementListWidget)
                 widget = QWidget()
                 layout = QHBoxLayout()
@@ -207,7 +205,6 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
                 self.elementListWidget.setItemWidget(item, widget)
 
     def on_element_item_selected(self):
-        QgsApplication.messageLog().logMessage(f"_on_element_item_selected", 'DigitalSketchPlugin')
         selected_items = self.elementListWidget.selectedItems()
         if selected_items:
             item = selected_items[0]  # Get the first selected item
@@ -217,7 +214,6 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
                 label = widget.findChild(QLabel)  # Find the checkbox inside the widget
                 if label:
                     self.selected_element = label.text()
-                    QgsApplication.messageLog().logMessage(f"Selected Item: {label.text()}", 'DigitalSketchPlugin')
 
     def colour_changed(self, colour):
         self.colour = colour.name(QColor.HexArgb)
@@ -235,3 +231,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
     def font_changed(self):
         self.font = self.mFontButton.currentFont()
         QgsApplication.messageLog().logMessage("Font updated", 'DigitalSketchPlugin')
+
+    def change_folder_ctrl_to_readonly(self, folder_location):
+        if folder_location is not None and folder_location != '':
+            self.folderQgsFileWidget.setReadOnly(True)

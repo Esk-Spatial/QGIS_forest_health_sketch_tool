@@ -16,7 +16,7 @@ class MultiLineDigitizingTool(QgsMapTool):
         self.multi_line_segments = []  # Stores all individual lines
         self.rubber_band = QgsRubberBand(self.iface.mapCanvas(), QgsWkbTypes.LineGeometry) # QgsWkbTypes.LineGeometry
         self.rubber_band.setColor(Qt.red)
-        self.rubber_band.setWidth(2)
+        self.rubber_band.setWidth(4)
 
     def canvasPressEvent(self, event):
         """Start a new line segment on stylus down"""
