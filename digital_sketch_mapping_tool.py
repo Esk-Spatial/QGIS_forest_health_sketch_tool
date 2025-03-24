@@ -402,6 +402,13 @@ class DigitalSketchMappingTool:
             self.iface.messageBar().pushMessage("Success", "Changes committed successfully to polygon layer!",
                                                 level=Qgis.Success)
 
+        gps = self.iface.mainWindow().findChild(QWidget, 'QgsGpsInformationWidgetBase')
+        when_leaving = gps.findChild(QRadioButton, "radRecenterWhenNeeded")
+
+        if when_leaving:
+            when_leaving.click()
+            QgsApplication.messageLog().logMessage(f" found {when_leaving.text()}.", 'DigitalSketchPlugin')
+
         self.remove_map_tool()
         self.check_for_current_selection()
 
@@ -472,16 +479,10 @@ class DigitalSketchMappingTool:
     def setup_stream_digitizing(self, layer, tool):
         """Setup digitizing mode using stylus events"""
         gps = self.iface.mainWindow().findChild(QWidget, 'QgsGpsInformationWidgetBase')
-        QgsApplication.messageLog().logMessage(f" {gps}.", 'DigitalSketchPlugin')
         never_center = gps.findChild(QRadioButton, "radNeverRecenter")
-        when_leaving = gps.findChild(QRadioButton, "radRecenterWhenNeeded")
 
         if never_center:
             never_center.click()
-            QgsApplication.messageLog().logMessage(f" found {never_center.text()}.", 'DigitalSketchPlugin')
-
-        if when_leaving:
-            QgsApplication.messageLog().logMessage(f" found {when_leaving.text()}.", 'DigitalSketchPlugin')
 
         self.iface.mapCanvas().refresh()
         self.iface.setActiveLayer(layer)
@@ -533,9 +534,9 @@ class DigitalSketchMappingTool:
         self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=lines", "lines", "ogr")
         self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=polygons", "polygons", "ogr")
 
-        self.point_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "styles",  "point_style.qml"))
-        self.polygon_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "styles",  "polygon_style.qml"))
-        self.line_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "styles", "line_style.qml"))
+        self.point_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "styles",  "geolink_points_240325.qml"))
+        self.polygon_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "styles",  "geolink_polygons_240325.qml"))
+        self.line_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "styles", "geolink_lines_240325.qml"))
 
         QgsProject.instance().addMapLayer(self.point_layer)
         QgsProject.instance().addMapLayer(self.line_layer)

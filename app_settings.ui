@@ -242,6 +242,7 @@
            </property>
            <property name="currentFont">
             <font>
+             <pointsize>12</pointsize>
              <stylestrategy>PreferDefault</stylestrategy>
              <kerning>false</kerning>
             </font>
