@@ -2,17 +2,17 @@ import copy
 
 _initial_data_ = [
   {"category": "BMAD", "selected": False, "colour": "#FFC0CB", "items": ["Discolour", "BMAD_L", "BMAD_M", "BMAD_H", "Stags", "Other"]},
-  {"category": "CLIMATE", "selected": False, "colour": "#808080", "items": ["Frost_", "Fire_", "Snow_", "Wind_", "L_", "Hail_"]},
-  {"category": "DEAD", "selected": False, "colour": "#FF0000", "items": ["D-tr_", "D-to_", "D-ti_", "D-tr-to-ti_"]},
+  {"category": "CLIMATE", "selected": False, "colour": "#D5D5D5", "items": ["Frost_", "Fire_", "Snow_", "Wind_", "L_", "Hail_"]},
+  {"category": "DEAD", "selected": False, "colour": "#FF9595", "items": ["D-tr_", "D-to_", "D-ti_", "D-tr-to-ti_"]},
   {"category": "EUCS", "selected": False, "colour": "#00FF00", "items": ["Creiis_", "Discolour_", "Defol_", "KLD_", "MLD_", "BMAD_", "QSB_", "WinterBB_"]},
   {"category": "GROUND", "selected": False, "colour": "#FFFFFF", "items": ["_Sirex", "_Drought", "_Root-H2O", "_Cyc", "_Essi", "_Herb", "_Etops", "_Yel-Tops"]},
-  {"category": "INCIDENCE", "selected": False, "colour": "#FFFFE0", "items": ["1-5%", "5-15%", "15-30%", "30-45%", "45-75%", ">75%"]},
-  {"category": "NEEDLES", "selected": False, "colour": "#FFFF00", "items": ["Dothi_", "Essi_", "Yelo_", "Brown_"]},
+  {"category": "INCIDENCE", "selected": False, "colour": "#FFFFe0", "items": ["1-5%", "5-15%", "15-30%", "30-45%", "45-75%", ">75%"]},
+  {"category": "NEEDLES", "selected": False, "colour": "#FFFFA4", "items": ["Dothi_", "Essi_", "Yelo_", "Brown_"]},
   {"category": "NUT-DEF", "selected": False, "colour": "#FFC0CB", "items": ["B-def_", "Mg-K-def_", "Nut-def_", "N-def"]},
   {"category": "POSSUM", "selected": False, "colour": "#FFA500", "items": ["Poss_"]},
   {"category": "SEVERITY", "selected": False, "colour": "#ADD8E6", "items": ["Low", "Moderate", "High", "Extreme"]},
   {"category": "SPH", "selected": False, "colour": "#D3D3D3", "items": ["SPH_"]},
-  {"category": "WEEDS", "selected": False, "colour": "#006400", "items": ["Weeds_"]}
+  {"category": "WEEDS", "selected": False, "colour": "#7AB47A", "items": ["Weeds_"]}
 ]
 
 class Keypad:

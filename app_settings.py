@@ -30,7 +30,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.colour = self.mColorButton.color().name(QColor.HexArgb)
         self.feature_colour = self.featureColorButton.color().name(QColor.HexArgb)
         self.font = self.mFontButton.currentFont()
-        self.height = 35
+        self.height = 30
         self.width = 150
         self.attributes = None
 
@@ -100,8 +100,8 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.updated_settings = True
         self.attributes = dict(folder_path=self.folder_location, feature_colour=self.feature_colour,
                                surveyor=self.surveyourLineEdit.text().strip(), type_txt=self.typeLineEdit.text().strip(),
-                               font=self.font, colour=self.colour, height=float(self.heightLineEdit.text().strip()),
-                               width=float(self.widthLineEdit.text().strip()))
+                               font=self.font, colour=self.colour, height=int(self.heightLineEdit.text().strip()),
+                               width=int(self.widthLineEdit.text().strip()))
         self.keypad_manager.update_dataset()
         self.accept()
 
@@ -138,8 +138,6 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             c_box.setObjectName(pad.category)
             select_state = 2 if pad.selected == True else 0
             c_box.setCheckState(select_state)
-            QgsApplication.messageLog().logMessage(
-                f" {pad.category} {c_box.checkState()} is selected: {pad.selected}", 'DigitalSketchPlugin')
             c_box.stateChanged.connect(lambda state, cb=c_box: self.checkbox_state_changed(cb, state))
 
             layout.addWidget(c_box)

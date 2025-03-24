@@ -24,7 +24,7 @@
 import traceback
 from collections import deque
 
-from PyQt5.QtWidgets import QRadioButton
+from PyQt5.QtWidgets import QRadioButton, QStackedWidget
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QVariant
 from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWidgets import (QAction, QFileDialog, QMessageBox, QPushButton, QVBoxLayout, QFileDialog, QDialog,
@@ -342,6 +342,8 @@ class DigitalSketchMappingTool:
             else:
                 attr_box.addWidget(self.populate_buttons_from_list(cat.items, cat.colour))
 
+        attr_box.addSpacerItem(QSpacerItem(40, 30, QSizePolicy.Expanding, QSizePolicy.Minimum))
+
     # --------------------------------------------------------------------------
 
     def button_clicked(self, button_name):
@@ -403,8 +405,8 @@ class DigitalSketchMappingTool:
                                                 level=Qgis.Success)
 
         gps = self.iface.mainWindow().findChild(QWidget, 'QgsGpsInformationWidgetBase')
-        when_leaving = gps.findChild(QRadioButton, "radRecenterWhenNeeded")
-
+        when_leaving = gps.findChild(QStackedWidget, "stackedWidgetPage4", Qt.FindChildrenRecursively)
+        QgsApplication.messageLog().logMessage(f" found {when_leaving}.", 'DigitalSketchPlugin')
         if when_leaving:
             when_leaving.click()
             QgsApplication.messageLog().logMessage(f" found {when_leaving.text()}.", 'DigitalSketchPlugin')
@@ -479,9 +481,10 @@ class DigitalSketchMappingTool:
     def setup_stream_digitizing(self, layer, tool):
         """Setup digitizing mode using stylus events"""
         gps = self.iface.mainWindow().findChild(QWidget, 'QgsGpsInformationWidgetBase')
-        never_center = gps.findChild(QRadioButton, "radNeverRecenter")
-
+        never_center = gps.findChild(QRadioButton, "radNeverRecenter", Qt.FindChildrenRecursively)
+        QgsApplication.messageLog().logMessage(f'never_center: {never_center}', 'DigitalSketchPlugin')
         if never_center:
+            QgsApplication.messageLog().logMessage(f'never_center', 'DigitalSketchPlugin')
             never_center.click()
 
         self.iface.mapCanvas().refresh()
@@ -578,6 +581,7 @@ class DigitalSketchMappingTool:
             btn.setMinimumWidth(self.attributes["width"])
             btn.setMaximumWidth(self.attributes["width"])
             btn.setFont(self.attributes["font"])
+            btn.setCheckable(True)
             btn.setStyleSheet(f"""
                             QPushButton {{
                                 background-color: {colour};
