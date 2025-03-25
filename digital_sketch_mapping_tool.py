@@ -28,7 +28,8 @@ from PyQt5.QtWidgets import QRadioButton, QStackedWidget
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QVariant
 from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWidgets import (QAction, QFileDialog, QMessageBox, QPushButton, QVBoxLayout, QFileDialog, QDialog,
-                                 QWidget, QHBoxLayout, QSpacerItem, QSizePolicy)
+                                 QWidget, QHBoxLayout, QSpacerItem, QSizePolicy, QGroupBox, QScrollArea, QToolButton,
+                                 QWidgetAction)
 from qgis.core import (QgsApplication, QgsFields, QgsCoordinateReferenceSystem, QgsVectorFileWriter, QgsWkbTypes,
                        QgsVectorLayer, QgsProject, QgsRasterLayer, QgsPointXY, QgsCoordinateTransform, QgsRectangle,
                        QgsField, QgsGpsConnection)
@@ -404,15 +405,30 @@ class DigitalSketchMappingTool:
             self.iface.messageBar().pushMessage("Success", "Changes committed successfully to polygon layer!",
                                                 level=Qgis.Success)
 
-        gps = self.iface.mainWindow().findChild(QWidget, 'QgsGpsInformationWidgetBase')
-        when_leaving = gps.findChild(QStackedWidget, "stackedWidgetPage4", Qt.FindChildrenRecursively)
-        QgsApplication.messageLog().logMessage(f" found {when_leaving}.", 'DigitalSketchPlugin')
-        if when_leaving:
-            when_leaving.click()
-            QgsApplication.messageLog().logMessage(f" found {when_leaving.text()}.", 'DigitalSketchPlugin')
-
+        self.change_gps_settings(False)
         self.remove_map_tool()
         self.check_for_current_selection()
+
+    # --------------------------------------------------------------------------
+
+    def change_gps_settings(self, start_digitizing):
+        gps = self.iface.mainWindow().findChild(QWidget, 'QgsGpsInformationWidgetBase')
+        popup_btn = gps.findChild(QToolButton, "mBtnPopupOptions")
+
+        if popup_btn:
+            btn_menu = popup_btn.menu()
+            # for act in btn_menu.actions():
+            #     default_w = act.defaultWidget()
+            #     QgsApplication.messageLog().logMessage(f"type:{default_w.__class__.__name__} {default_w.accessibleName()}",
+            #                                                                            'DigitalSketchPlugin')
+
+            for child in btn_menu.findChildren(QWidget):
+                if isinstance(child, QRadioButton):
+                    if start_digitizing and child.text() == 'Never Recenter':
+                        child.click()
+                    elif not start_digitizing and child.text() == 'Recenter Map When Leaving Extent':
+                        child.click()
+                    # QgsApplication.messageLog().logMessage(f" {child.text()} {start_digitizing}", 'DigitalSketchPlugin')
 
     # --------------------------------------------------------------------------
 
@@ -480,13 +496,7 @@ class DigitalSketchMappingTool:
 
     def setup_stream_digitizing(self, layer, tool):
         """Setup digitizing mode using stylus events"""
-        gps = self.iface.mainWindow().findChild(QWidget, 'QgsGpsInformationWidgetBase')
-        never_center = gps.findChild(QRadioButton, "radNeverRecenter", Qt.FindChildrenRecursively)
-        QgsApplication.messageLog().logMessage(f'never_center: {never_center}', 'DigitalSketchPlugin')
-        if never_center:
-            QgsApplication.messageLog().logMessage(f'never_center', 'DigitalSketchPlugin')
-            never_center.click()
-
+        self.change_gps_settings(True)
         self.iface.mapCanvas().refresh()
         self.iface.setActiveLayer(layer)
         layer.startEditing()
