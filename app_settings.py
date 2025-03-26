@@ -6,6 +6,7 @@ from qgis.core import QgsApplication
 import os
 from qgis.gui import QgsColorButton
 
+from edit_element import EditElement
 from helper import show_delete_confirmation
 from new_category_element import NewCategoryElement
 
@@ -61,8 +62,8 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.addCategoryPushButton.clicked.connect(lambda: self.open_add_dialog("category"))
         self.addElementPushButton.clicked.connect(lambda: self.open_add_dialog("element"))
 
-        self.buttonBox.button(QDialogButtonBox.Apply).clicked.connect(self.apply_settings)
-        self.buttonBox.button(QDialogButtonBox.Discard).clicked.connect(self.discard_settings)
+        self.applyPushButton.clicked.connect(self.apply_settings)
+        self.discardPushButton.clicked.connect(self.discard_settings)
         self.mFontButton.changed.connect(self.font_changed)
         self.featureColorButton.colorChanged.connect(self.feature_colour_changed)
         self.mColorButton.colorChanged.connect(self.colour_changed)
@@ -249,6 +250,10 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
     def edit_keypad_item(self, eb):
         cat_element = get_category_element(eb.objectName())
+        edit_element = EditElement(cat_element[1])
+        if edit_element.exec_() == QDialog.Accepted:
+            self.keypad_manager.update_item(cat_element[0], cat_element[1], edit_element.get_element_text())
+            self.clear_populate_elements_list(self.selected_category)
 
 
     def delete_keypad_item(self, db):

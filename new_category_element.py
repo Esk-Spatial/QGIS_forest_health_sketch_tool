@@ -24,8 +24,8 @@ class NewCategoryElement(QDialog, FORM_CLASS):
             self.elementGroupBox.setVisible(True)
             self.categoryGroupBox.setVisible(False)
 
-        self.buttonBox.button(QDialogButtonBox.Apply).clicked.connect(self.add_new_category_element)
-        self.buttonBox.button(QDialogButtonBox.Discard).clicked.connect(self.discard_new_category_element)
+        self.applyPushButton.clicked.connect(self.add_new_category_element)
+        self.discardPushButton.clicked.connect(self.discard_new_category_element)
 
 
     def add_new_category_element(self):

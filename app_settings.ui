@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>756</width>
+    <width>732</width>
     <height>603</height>
    </rect>
   </property>
@@ -623,9 +623,9 @@
            </property>
            <property name="font">
             <font>
-             <pointsize>9</pointsize>
-             <weight>75</weight>
-             <bold>true</bold>
+             <pointsize>10</pointsize>
+             <weight>50</weight>
+             <bold>false</bold>
             </font>
            </property>
            <property name="title">
@@ -868,17 +868,41 @@
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_4">
          <property name="leftMargin">
-          <number>2</number>
+          <number>10</number>
          </property>
          <property name="topMargin">
           <number>2</number>
          </property>
          <property name="rightMargin">
-          <number>2</number>
+          <number>10</number>
          </property>
          <property name="bottomMargin">
           <number>2</number>
          </property>
+         <item>
+          <widget class="QPushButton" name="discardPushButton">
+           <property name="minimumSize">
+            <size>
+             <width>0</width>
+             <height>40</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>125</width>
+             <height>40</height>
+            </size>
+           </property>
+           <property name="font">
+            <font>
+             <pointsize>13</pointsize>
+            </font>
+           </property>
+           <property name="text">
+            <string>Discard</string>
+           </property>
+          </widget>
+         </item>
          <item>
           <spacer name="horizontalSpacer">
            <property name="orientation">
@@ -893,29 +917,26 @@
           </spacer>
          </item>
          <item>
-          <widget class="QDialogButtonBox" name="buttonBox">
+          <widget class="QPushButton" name="applyPushButton">
            <property name="minimumSize">
             <size>
-             <width>100</width>
-             <height>30</height>
+             <width>0</width>
+             <height>40</height>
             </size>
            </property>
            <property name="maximumSize">
             <size>
-             <width>150</width>
-             <height>30</height>
+             <width>125</width>
+             <height>40</height>
             </size>
            </property>
            <property name="font">
             <font>
-             <pointsize>9</pointsize>
+             <pointsize>13</pointsize>
             </font>
            </property>
-           <property name="standardButtons">
-            <set>QDialogButtonBox::Apply|QDialogButtonBox::Discard</set>
-           </property>
-           <property name="centerButtons">
-            <bool>false</bool>
+           <property name="text">
+            <string>Apply</string>
            </property>
           </widget>
          </item>

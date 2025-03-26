@@ -50,7 +50,7 @@ class KeypadManager:
             self.data_cpy.append(data)
 
     def add_item(self, category_name, data):
-        category = next((cat for cat in self.data_cpy if cat.category == category_name), None)
+        category = self.get_category_by_name(category_name)
         if category:
             category.items.append(data)
 
@@ -67,7 +67,7 @@ class KeypadManager:
 
     def move_item(self, category_name, item, direction):
         """Moves an item up or down within a category."""
-        category = next((cat for cat in self.data_cpy if cat.category == category_name), None)
+        category = self.get_category_by_name(category_name)
         if category is None:
             print(f"Category '{category_name}' not found.")
             return
@@ -87,17 +87,26 @@ class KeypadManager:
 
     def remove_item(self, category_name, item):
         """Removes an item from a category."""
-        category = next((cat for cat in self.data_cpy if cat.category == category_name), None)
+        category = self.get_category_by_name(category_name)
         if category:
             category.items = [i for i in category.items if i != item]
 
     def set_category_selection(self, category_name, state):
-        category = next((cat for cat in self.data_cpy if cat.category == category_name), None)
+        category = self.get_category_by_name(category_name)
         if category:
             selection = state == 2
             category.selected = selection
 
     def set_category_colour(self, category_name, colour):
-        category = next((cat for cat in self.data_cpy if cat.category == category_name), None)
+        category = self.get_category_by_name(category_name)
         if category:
             category.colour = colour
+
+    def update_item(self, category_name, old_name, new_name):
+        """update an item name from a category."""
+        category = self.get_category_by_name(category_name)
+        if category:
+            category.items = [new_name if i == old_name else i for i in category.items]
+
+    def get_category_by_name(self, category_name):
+        return next((cat for cat in self.data_cpy if cat.category == category_name), None)
