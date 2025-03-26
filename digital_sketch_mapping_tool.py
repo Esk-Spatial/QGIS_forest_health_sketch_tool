@@ -34,6 +34,8 @@ from qgis.core import (QgsApplication, QgsFields, QgsCoordinateReferenceSystem, 
                        QgsVectorLayer, QgsProject, QgsRasterLayer, QgsPointXY, QgsCoordinateTransform, QgsRectangle,
                        QgsField, QgsGpsConnection)
 from datetime import datetime
+
+from custom_zoom_tool import CustomZoomTool
 from helper import create_geopackage_file, split_array_to_chunks, adjust_color
 from qgis.core import (QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer,
                        QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis)
@@ -106,6 +108,8 @@ class DigitalSketchMappingTool:
         self.attributes = None
         self.layers_saved = 0
         self.selected_attribute = None
+        self.zoom_factor = 2
+        self.zoom_tool = CustomZoomTool(self.iface, self.zoom_factor)
         self.multiline_tool = None
         self.polygon_tool = None
         self.point_tool = None
@@ -258,6 +262,9 @@ class DigitalSketchMappingTool:
             callback=self.run,
             parent=self.iface.mainWindow())
 
+        self.digital_sketch_widget.zoomInPushButton.clicked.connect(lambda: self.zoom_to_map(True))
+        self.digital_sketch_widget.zoomOutPushButton.clicked.connect(lambda: self.zoom_to_map(False))
+
         self.digital_sketch_widget.savePushButton.clicked.connect(self.save_layers)
         self.digital_sketch_widget.settingPushButton.clicked.connect(self.open_settings)
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
@@ -382,6 +389,11 @@ class DigitalSketchMappingTool:
 
         # Connect to feature added signal
         layer.featureAdded.connect(lambda fid: self.process_layer_after_adding(fid, layer, layer_type))
+
+    # --------------------------------------------------------------------------
+
+    def zoom_to_map(self, is_zoom_in):
+        self.zoom_tool.zoom_map(is_zoom_in)
 
     # --------------------------------------------------------------------------
 

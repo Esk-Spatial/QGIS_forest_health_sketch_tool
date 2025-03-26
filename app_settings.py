@@ -6,6 +6,7 @@ from qgis.core import QgsApplication
 import os
 from qgis.gui import QgsColorButton
 
+from helper import show_delete_confirmation
 from new_category_element import NewCategoryElement
 
 # Load the UI file dynamically
@@ -15,6 +16,8 @@ FORM_CLASS, _ = uic.loadUiType(os.path.join(os.path.dirname(__file__), "app_sett
 def update_colour(pad, colour):
     pad.colour = colour.name()
 
+def get_category_element(text):
+    return text.split(':')
 
 class AppSettingsDialog(QDialog, FORM_CLASS):
     def __init__(self, keypad_manager, attributes, parent=None):
@@ -130,9 +133,10 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
             # Delete Button (QPushButton)
             delete_button = QPushButton('X')
+            delete_button.setObjectName(pad.category)
             delete_button.setMaximumSize(30, 30)
             delete_button.setStyleSheet("background-color: red; color: white; border-radius: 5px;")
-            delete_button.clicked.connect(lambda: self.delete_keypad_item(item))
+            delete_button.clicked.connect(lambda state, db=delete_button: self.delete_keypad_category(db))
 
             c_box = QCheckBox(pad.category)
             c_box.setObjectName(pad.category)
@@ -176,20 +180,23 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
                 label.setMinimumSize(50, 30)
 
                 space = QSpacerItem(40, 30, QSizePolicy.Expanding, QSizePolicy.Minimum)
+                obj_name = f'{category.category}:{element}'
 
                 # edit Button (QPushButton)
                 edit_button = QPushButton('Edit')
+                edit_button.setObjectName(obj_name)
                 edit_button.setMinimumSize(40, 30)
                 edit_button.setMaximumSize(40, 30)
                 edit_button.setStyleSheet("background-color: blue; color: white; border-radius: 5px;")
-                edit_button.clicked.connect(lambda: self.delete_keypad_item(item))
+                edit_button.clicked.connect(lambda state, eb=edit_button: self.edit_keypad_item(eb))
 
                 # Delete Button (QPushButton)
                 delete_button = QPushButton('X')
+                delete_button.setObjectName(obj_name)
                 delete_button.setMinimumSize(30, 30)
                 delete_button.setMaximumSize(30, 30)
                 delete_button.setStyleSheet("background-color: red; color: white; border-radius: 5px;")
-                delete_button.clicked.connect(lambda: self.delete_keypad_item(item))
+                delete_button.clicked.connect(lambda state, db=delete_button: self.delete_keypad_item(db))
 
                 layout.addWidget(label)
                 layout.addItem(space)
@@ -233,3 +240,19 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
     def change_folder_ctrl_to_readonly(self, folder_location):
         if folder_location is not None and folder_location != '':
             self.folderQgsFileWidget.setReadOnly(True)
+
+    def delete_keypad_category(self, db):
+        category = db.objectName()
+        if show_delete_confirmation(f'Category: {category}') == QDialog.Accepted:
+            self.keypad_manager.remove_category(category)
+            self.clear_and_populate_categories()
+
+    def edit_keypad_item(self, eb):
+        cat_element = get_category_element(eb.objectName())
+
+
+    def delete_keypad_item(self, db):
+        cat_element = get_category_element(db.objectName())
+        if show_delete_confirmation(f'Element: {cat_element[1]}') == QDialog.Accepted:
+            self.keypad_manager.remove_item(cat_element[0], cat_element[1])
+            self.clear_populate_elements_list(self.selected_category)
