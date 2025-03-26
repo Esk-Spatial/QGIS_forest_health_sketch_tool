@@ -36,7 +36,7 @@ from qgis.core import (QgsApplication, QgsFields, QgsCoordinateReferenceSystem, 
 from datetime import datetime
 
 from custom_zoom_tool import CustomZoomTool
-from helper import create_geopackage_file, split_array_to_chunks, adjust_color
+from helper import create_geopackage_file, split_array_to_chunks, adjust_color, show_delete_confirmation
 from qgis.core import (QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer,
                        QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis)
 
@@ -473,19 +473,26 @@ class DigitalSketchMappingTool:
             layer_type = self.selected_attribute["type"]
             layer_fid = self.selected_attribute["fid"]
 
-            QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
-            self.created_layers_stack.remove({"type": layer_type, "fid": layer_fid})
-            QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
+            if show_delete_confirmation(f'{layer_type} Feature: {layer_fid}') == QDialog.Accepted:
+                self.created_layers_stack.remove({"type": layer_type, "fid": layer_fid})
+            else:
+                self.selected_attribute = None
+                return
 
         else:
             if len(self.created_layers_stack) == 0:
                 return
 
             QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
-            last_layer = self.created_layers_stack.pop()
-            QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
+            last_index = len(self.created_layers_stack)-1
+            last_layer = self.created_layers_stack[last_index]
             layer_type = last_layer["type"]
             layer_fid = last_layer["fid"]
+            if show_delete_confirmation(f'{layer_type} Feature: {layer_fid}') == QDialog.Accepted:
+                self.created_layers_stack.pop()
+                QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
+            else:
+                return
 
         if layer_type == "lines":
             self.delete_feature(self.line_layer, layer_fid)
