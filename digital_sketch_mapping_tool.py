@@ -24,16 +24,19 @@
 import traceback
 from collections import deque
 
-from PyQt5.QtWidgets import QRadioButton
+from PyQt5.QtWidgets import QRadioButton, QStackedWidget
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QVariant
 from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWidgets import (QAction, QFileDialog, QMessageBox, QPushButton, QVBoxLayout, QFileDialog, QDialog,
-                                 QWidget, QHBoxLayout, QSpacerItem, QSizePolicy)
+                                 QWidget, QHBoxLayout, QSpacerItem, QSizePolicy, QGroupBox, QScrollArea, QToolButton,
+                                 QWidgetAction)
 from qgis.core import (QgsApplication, QgsFields, QgsCoordinateReferenceSystem, QgsVectorFileWriter, QgsWkbTypes,
                        QgsVectorLayer, QgsProject, QgsRasterLayer, QgsPointXY, QgsCoordinateTransform, QgsRectangle,
                        QgsField, QgsGpsConnection)
 from datetime import datetime
-from helper import create_geopackage_file, split_array_to_chunks, adjust_color
+
+from custom_zoom_tool import CustomZoomTool
+from helper import create_geopackage_file, split_array_to_chunks, adjust_color, show_delete_confirmation
 from qgis.core import (QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer,
                        QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis)
 
@@ -105,6 +108,8 @@ class DigitalSketchMappingTool:
         self.attributes = None
         self.layers_saved = 0
         self.selected_attribute = None
+        self.zoom_factor = 2
+        self.zoom_tool = CustomZoomTool(self.iface, self.zoom_factor)
         self.multiline_tool = None
         self.polygon_tool = None
         self.point_tool = None
@@ -257,6 +262,9 @@ class DigitalSketchMappingTool:
             callback=self.run,
             parent=self.iface.mainWindow())
 
+        self.digital_sketch_widget.zoomInPushButton.clicked.connect(lambda: self.zoom_to_map(True))
+        self.digital_sketch_widget.zoomOutPushButton.clicked.connect(lambda: self.zoom_to_map(False))
+
         self.digital_sketch_widget.savePushButton.clicked.connect(self.save_layers)
         self.digital_sketch_widget.settingPushButton.clicked.connect(self.open_settings)
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
@@ -342,6 +350,8 @@ class DigitalSketchMappingTool:
             else:
                 attr_box.addWidget(self.populate_buttons_from_list(cat.items, cat.colour))
 
+        attr_box.addSpacerItem(QSpacerItem(40, 30, QSizePolicy.Expanding, QSizePolicy.Minimum))
+
     # --------------------------------------------------------------------------
 
     def button_clicked(self, button_name):
@@ -382,6 +392,11 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
+    def zoom_to_map(self, is_zoom_in):
+        self.zoom_tool.zoom_map(is_zoom_in)
+
+    # --------------------------------------------------------------------------
+
     def save_layers(self):
         QgsApplication.messageLog().logMessage("Save layers is called", 'DigitalSketchPlugin')
         if self.point_layer.isEditable():
@@ -402,15 +417,30 @@ class DigitalSketchMappingTool:
             self.iface.messageBar().pushMessage("Success", "Changes committed successfully to polygon layer!",
                                                 level=Qgis.Success)
 
-        gps = self.iface.mainWindow().findChild(QWidget, 'QgsGpsInformationWidgetBase')
-        when_leaving = gps.findChild(QRadioButton, "radRecenterWhenNeeded")
-
-        if when_leaving:
-            when_leaving.click()
-            QgsApplication.messageLog().logMessage(f" found {when_leaving.text()}.", 'DigitalSketchPlugin')
-
+        self.change_gps_settings(False)
         self.remove_map_tool()
         self.check_for_current_selection()
+
+    # --------------------------------------------------------------------------
+
+    def change_gps_settings(self, start_digitizing):
+        gps = self.iface.mainWindow().findChild(QWidget, 'QgsGpsInformationWidgetBase')
+        popup_btn = gps.findChild(QToolButton, "mBtnPopupOptions")
+
+        if popup_btn:
+            btn_menu = popup_btn.menu()
+            # for act in btn_menu.actions():
+            #     default_w = act.defaultWidget()
+            #     QgsApplication.messageLog().logMessage(f"type:{default_w.__class__.__name__} {default_w.accessibleName()}",
+            #                                                                            'DigitalSketchPlugin')
+
+            for child in btn_menu.findChildren(QWidget):
+                if isinstance(child, QRadioButton):
+                    if start_digitizing and child.text() == 'Never Recenter':
+                        child.click()
+                    elif not start_digitizing and child.text() == 'Recenter Map When Leaving Extent':
+                        child.click()
+                    # QgsApplication.messageLog().logMessage(f" {child.text()} {start_digitizing}", 'DigitalSketchPlugin')
 
     # --------------------------------------------------------------------------
 
@@ -443,19 +473,26 @@ class DigitalSketchMappingTool:
             layer_type = self.selected_attribute["type"]
             layer_fid = self.selected_attribute["fid"]
 
-            QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
-            self.created_layers_stack.remove({"type": layer_type, "fid": layer_fid})
-            QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
+            if show_delete_confirmation(f'{layer_type} Feature: {layer_fid}') == QDialog.Accepted:
+                self.created_layers_stack.remove({"type": layer_type, "fid": layer_fid})
+            else:
+                self.selected_attribute = None
+                return
 
         else:
             if len(self.created_layers_stack) == 0:
                 return
 
             QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
-            last_layer = self.created_layers_stack.pop()
-            QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
+            last_index = len(self.created_layers_stack)-1
+            last_layer = self.created_layers_stack[last_index]
             layer_type = last_layer["type"]
             layer_fid = last_layer["fid"]
+            if show_delete_confirmation(f'{layer_type} Feature: {layer_fid}') == QDialog.Accepted:
+                self.created_layers_stack.pop()
+                QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
+            else:
+                return
 
         if layer_type == "lines":
             self.delete_feature(self.line_layer, layer_fid)
@@ -478,12 +515,7 @@ class DigitalSketchMappingTool:
 
     def setup_stream_digitizing(self, layer, tool):
         """Setup digitizing mode using stylus events"""
-        gps = self.iface.mainWindow().findChild(QWidget, 'QgsGpsInformationWidgetBase')
-        never_center = gps.findChild(QRadioButton, "radNeverRecenter")
-
-        if never_center:
-            never_center.click()
-
+        self.change_gps_settings(True)
         self.iface.mapCanvas().refresh()
         self.iface.setActiveLayer(layer)
         layer.startEditing()
@@ -578,6 +610,7 @@ class DigitalSketchMappingTool:
             btn.setMinimumWidth(self.attributes["width"])
             btn.setMaximumWidth(self.attributes["width"])
             btn.setFont(self.attributes["font"])
+            btn.setCheckable(True)
             btn.setStyleSheet(f"""
                             QPushButton {{
                                 background-color: {colour};

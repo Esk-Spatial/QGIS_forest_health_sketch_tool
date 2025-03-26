@@ -1,6 +1,8 @@
 import datetime
 from pyexpat import features
 
+from delete_confirmation import DeleteConfirmationDialog
+
 try:
     from osgeo import ogr
 except ImportError:
@@ -120,3 +122,7 @@ def update_feature_attributes(feature, layer_type, attributes):
     feature.setAttribute('Time', get_current_time())
 
     return feature
+
+def show_delete_confirmation(text):
+    delete_confirmation =  DeleteConfirmationDialog(text)
+    return delete_confirmation.exec_()
