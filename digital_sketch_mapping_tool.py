@@ -297,7 +297,6 @@ class DigitalSketchMappingTool:
     def set_layer_from_existing(self):
         existing_layers = QgsProject.instance().mapLayers(validOnly=True)
         layer_tree = QgsProject.instance().layerTreeRoot()
-        QgsApplication.messageLog().logMessage(f'existing_layers {existing_layers}.\nlayer tree {layer_tree}', 'DigitalSketchPlugin')
         enabled_layers = {
             l_id: layer
             for l_id, layer in existing_layers.items()
@@ -309,18 +308,12 @@ class DigitalSketchMappingTool:
         for l_id, layer in enabled_layers.items():
             if 'sketch-points' in layer.name():
                 self.point_layer = layer
-                self.point_layer.loadNamedStyle(self.point_style)
-                self.point_tool = StreamDigitizingTool(self.iface, self.point_layer, 'points')
             elif 'sketch-polygons' in layer.name():
                 self.polygon_layer = layer
-                self.polygon_layer.loadNamedStyle(self.polygon_style)
-                self.polygon_tool = StreamDigitizingTool(self.iface, self.polygon_layer, 'polygons')
             elif 'sketch-lines' in layer.name():
                 self.line_layer = layer
-                self.line_layer.loadNamedStyle(self.line_style)
-                self.multiline_tool = MultiLineDigitizingTool(self.iface, self.line_layer)
 
-        self.canvas.refresh()
+        self.set_style_and_digitizing_tool()
 
     # --------------------------------------------------------------------------
 
@@ -611,19 +604,11 @@ class DigitalSketchMappingTool:
         self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-lines", "lines", "ogr")
         self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-polygons", "polygons", "ogr")
 
-        self.point_layer.loadNamedStyle(self.point_style)
-        self.polygon_layer.loadNamedStyle(self.polygon_style)
-        self.line_layer.loadNamedStyle(self.line_style)
-
         QgsProject.instance().addMapLayer(self.point_layer)
         QgsProject.instance().addMapLayer(self.line_layer)
         QgsProject.instance().addMapLayer(self.polygon_layer)
 
-        self.point_tool = StreamDigitizingTool(self.iface, self.point_layer, 'points')
-        self.polygon_tool = StreamDigitizingTool(self.iface, self.polygon_layer, 'polygons')
-        self.multiline_tool = MultiLineDigitizingTool(self.iface, self.line_layer)
-
-        self.canvas.refresh()
+        self.set_style_and_digitizing_tool()
 
     #--------------------------------------------------------------------------
 
@@ -692,6 +677,19 @@ class DigitalSketchMappingTool:
 
     def get_code_txt(self):
         return self.digital_sketch_widget.codeLineEdit.text().strip()
+
+    # --------------------------------------------------------------------------
+
+    def set_style_and_digitizing_tool(self):
+        self.point_layer.loadNamedStyle(self.point_style)
+        self.polygon_layer.loadNamedStyle(self.polygon_style)
+        self.line_layer.loadNamedStyle(self.line_style)
+
+        self.point_tool = StreamDigitizingTool(self.iface, self.point_layer, 'points')
+        self.polygon_tool = StreamDigitizingTool(self.iface, self.polygon_layer, 'polygons')
+        self.multiline_tool = MultiLineDigitizingTool(self.iface, self.line_layer)
+
+        self.canvas.refresh()
 
     # --------------------------------------------------------------------------
 
