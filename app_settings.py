@@ -5,6 +5,7 @@ from qgis.PyQt import uic
 from qgis.core import QgsApplication
 import os
 from qgis.gui import QgsColorButton
+from PyQt5.QtCore import Qt
 
 from add_or_edit_element import AddOrEditElement
 from helper import show_delete_confirmation
@@ -37,6 +38,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.height = 30
         self.width = 150
         self.attributes = None
+        self.use_existing_layer = False
 
         if attributes is not None:
             self.folder_location = attributes["folder_path"]
@@ -49,6 +51,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             self.mColorButton.setColor(QColor(attributes["colour"]))
             self.heightLineEdit.setText(f'{attributes["height"]}')
             self.widthLineEdit.setText(f'{attributes["width"]}')
+            self.useExistingLayerCheckBox.setChecked(attributes["use_existing"])
 
         self.updated_settings = False
         self.clear_and_populate_categories()
@@ -68,6 +71,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.featureColorButton.colorChanged.connect(self.feature_colour_changed)
         self.mColorButton.colorChanged.connect(self.colour_changed)
         self.folderQgsFileWidget.fileChanged.connect(self.set_folder_location)
+        self.useExistingLayerCheckBox.stateChanged.connect(lambda state: self.set_use_existing(state))
 
     def move_category(self, direction):
         QgsApplication.messageLog().logMessage(f"move_category: {direction}", 'DigitalSketchPlugin')
@@ -108,10 +112,10 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
     def apply_settings(self):
         QgsApplication.messageLog().logMessage("apply_settings", 'DigitalSketchPlugin')
         self.updated_settings = True
-        self.attributes = dict(folder_path=self.folder_location, feature_colour=self.feature_colour,
-                               surveyor=self.surveyourLineEdit.text().strip(), type_txt=self.typeLineEdit.text().strip(),
-                               font=self.font, colour=self.colour, height=int(self.heightLineEdit.text().strip()),
-                               width=int(self.widthLineEdit.text().strip()))
+        self.attributes = dict(folder_path=self.folder_location, use_existing=self.use_existing_layer,
+                               feature_colour=self.feature_colour, surveyor=self.surveyourLineEdit.text().strip(),
+                               type_txt=self.typeLineEdit.text().strip(), font=self.font, colour=self.colour,
+                               height=int(self.heightLineEdit.text().strip()), width=int(self.widthLineEdit.text().strip()))
         self.keypad_manager.update_dataset()
         self.accept()
 
@@ -229,20 +233,19 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
     def colour_changed(self, colour):
         self.colour = colour.name(QColor.HexArgb)
-        QgsApplication.messageLog().logMessage(f'Colour: {self.colour}', 'DigitalSketchPlugin')
 
     def feature_colour_changed(self, colour):
         self.feature_colour = colour.name(QColor.HexArgb)
-        QgsApplication.messageLog().logMessage(f'Colour: {self.colour}', 'DigitalSketchPlugin')
 
     def set_folder_location(self, folder):
-        QgsApplication.messageLog().logMessage(f'Directory path {folder}.', 'DigitalSketchPlugin')
         if folder:
             self.folder_location = folder
 
+    def set_use_existing(self, state):
+        self.use_existing_layer = state == Qt.Checked
+
     def font_changed(self):
         self.font = self.mFontButton.currentFont()
-        QgsApplication.messageLog().logMessage("Font updated", 'DigitalSketchPlugin')
 
     def change_folder_ctrl_to_readonly(self, folder_location):
         if folder_location is not None and folder_location != '':

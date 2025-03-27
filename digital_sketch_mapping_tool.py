@@ -99,6 +99,7 @@ class DigitalSketchMappingTool:
         self.feature_string = ""
         self.selected_colour = "#3dc61780"
         self.folder_location_set = False
+        self.use_existing = False
         self.point_layer = None
         self.line_layer = None
         self.polygon_layer = None
@@ -113,6 +114,9 @@ class DigitalSketchMappingTool:
         self.multiline_tool = None
         self.polygon_tool = None
         self.point_tool = None
+        self.point_style = os.path.join(os.path.dirname(__file__), "styles", "geolink_points_240325.qml")
+        self.polygon_style = os.path.join(os.path.dirname(__file__), "styles", "geolink_polygons_240325.qml")
+        self.line_style = os.path.join(os.path.dirname(__file__), "styles", "geolink_lines_240325.qml")
 
         self.bing_maps_url = (
             "https://t0.tiles.virtualearth.net/tiles/a{q}.jpeg?g=685&mkt=en-us&n=z"
@@ -290,6 +294,36 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
+    def set_layer_from_existing(self):
+        existing_layers = QgsProject.instance().mapLayers(validOnly=True)
+        layer_tree = QgsProject.instance().layerTreeRoot()
+        QgsApplication.messageLog().logMessage(f'existing_layers {existing_layers}.\nlayer tree {layer_tree}', 'DigitalSketchPlugin')
+        enabled_layers = {
+            l_id: layer
+            for l_id, layer in existing_layers.items()
+            if (layer_tree.findLayer(l_id) and
+                layer_tree.findLayer(l_id).isVisible() and
+                layer.__class__.__name__ == 'QgsVectorLayer') and
+               "sketch-" in layer.name()
+        }
+        for l_id, layer in enabled_layers.items():
+            if 'sketch-points' in layer.name():
+                self.point_layer = layer
+                self.point_layer.loadNamedStyle(self.point_style)
+                self.point_tool = StreamDigitizingTool(self.iface, self.point_layer, 'points')
+            elif 'sketch-polygons' in layer.name():
+                self.polygon_layer = layer
+                self.polygon_layer.loadNamedStyle(self.polygon_style)
+                self.polygon_tool = StreamDigitizingTool(self.iface, self.polygon_layer, 'polygons')
+            elif 'sketch-lines' in layer.name():
+                self.line_layer = layer
+                self.line_layer.loadNamedStyle(self.line_style)
+                self.multiline_tool = MultiLineDigitizingTool(self.iface, self.line_layer)
+
+        self.canvas.refresh()
+
+    # --------------------------------------------------------------------------
+
     def load_bing_maps(self):
         # Load Bing Maps XYZ layer
         xyz_uri = f"type=xyz&url={self.bing_maps_url}&zmax=18&zmin=0&http-header:referer="
@@ -458,6 +492,8 @@ class DigitalSketchMappingTool:
             if not self.folder_location_set and self.attributes['folder_path'] is not None:
                 self.folder_location_set = True
                 self.set_folder_location()
+            elif self.use_existing != self.attributes['use_existing']:
+                self.set_layer_from_existing()
             self.populate_categories()
 
     # --------------------------------------------------------------------------
@@ -571,13 +607,13 @@ class DigitalSketchMappingTool:
         crs_ors = str(self.canvas.mapSettings().destinationCrs().toProj())
         create_geopackage_file(gpkg_file_name, crs_ors)
 
-        self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=points", "points", "ogr")
-        self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=lines", "lines", "ogr")
-        self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=polygons", "polygons", "ogr")
+        self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-points", "points", "ogr")
+        self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-lines", "lines", "ogr")
+        self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-polygons", "polygons", "ogr")
 
-        self.point_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "styles",  "geolink_points_240325.qml"))
-        self.polygon_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "styles",  "geolink_polygons_240325.qml"))
-        self.line_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "styles", "geolink_lines_240325.qml"))
+        self.point_layer.loadNamedStyle(self.point_style)
+        self.polygon_layer.loadNamedStyle(self.polygon_style)
+        self.line_layer.loadNamedStyle(self.line_style)
 
         QgsProject.instance().addMapLayer(self.point_layer)
         QgsProject.instance().addMapLayer(self.line_layer)
