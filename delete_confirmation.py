@@ -3,7 +3,6 @@ from qgis.PyQt.QtWidgets import QDialog
 from qgis.PyQt import uic
 from qgis.core import QgsApplication
 import os
-from new_category import NewCategory
 
 # Load the UI file dynamically
 FORM_CLASS, _ = uic.loadUiType(os.path.join(os.path.dirname(__file__), "delete_confirmation.ui"))
