@@ -6,9 +6,9 @@ from qgis.core import QgsApplication
 import os
 from qgis.gui import QgsColorButton
 
-from edit_element import EditElement
+from add_or_edit_element import AddOrEditElement
 from helper import show_delete_confirmation
-from new_category_element import NewCategoryElement
+from new_category import NewCategory
 
 # Load the UI file dynamically
 FORM_CLASS, _ = uic.loadUiType(os.path.join(os.path.dirname(__file__), "app_settings.ui"))
@@ -59,8 +59,8 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.moveDownNeedleItemPushButton.clicked.connect(lambda: self.move_element("down"))
         self.moveUpNeedleItemPushButton.clicked.connect(lambda: self.move_element("up"))
 
-        self.addCategoryPushButton.clicked.connect(lambda: self.open_add_dialog("category"))
-        self.addElementPushButton.clicked.connect(lambda: self.open_add_dialog("element"))
+        self.addCategoryPushButton.clicked.connect(lambda: self.add_category())
+        self.addElementPushButton.clicked.connect(lambda: self.add_element())
 
         self.applyPushButton.clicked.connect(self.apply_settings)
         self.discardPushButton.clicked.connect(self.discard_settings)
@@ -83,21 +83,27 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         QgsApplication.messageLog().logMessage(f"checkbox {checkbox.objectName()} state_changed: {state}", 'DigitalSketchPlugin')
         self.keypad_manager.set_category_selection(checkbox.objectName(), state)
 
-    def open_add_dialog(self, mode):
-        QgsApplication.messageLog().logMessage(f"open_add_dialog {mode}", 'DigitalSketchPlugin')
+    def add_category(self):
+        QgsApplication.messageLog().logMessage(f"add_category", 'DigitalSketchPlugin')
 
-        add_dialog = NewCategoryElement(mode)
+        add_dialog = NewCategory()
         if add_dialog.exec_() == QDialog.Accepted:
             data = add_dialog.get_add_data()
             if data:
                 QgsApplication.messageLog().logMessage(f"accepted data {data}", 'DigitalSketchPlugin')
-                if mode == 'category':
-                    self.keypad_manager.add_category(data)
-                    self.clear_and_populate_categories()
+                self.keypad_manager.add_category(data)
+                self.clear_and_populate_categories()
 
-                else:
-                    self.keypad_manager.add_item(self.selected_category, data)
-                    self.clear_populate_elements_list(self.selected_category)
+    def add_element(self):
+        if self.selected_category == '':
+            return
+
+        add_element = AddOrEditElement()
+        if add_element.exec_() == QDialog.Accepted:
+            data = add_element.get_element_text()
+            if data != "":
+                self.keypad_manager.add_item(self.selected_category, data)
+                self.clear_populate_elements_list(self.selected_category)
 
     def apply_settings(self):
         QgsApplication.messageLog().logMessage("apply_settings", 'DigitalSketchPlugin')
@@ -250,7 +256,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
     def edit_keypad_item(self, eb):
         cat_element = get_category_element(eb.objectName())
-        edit_element = EditElement(cat_element[1])
+        edit_element = AddOrEditElement(cat_element[1])
         if edit_element.exec_() == QDialog.Accepted:
             self.keypad_manager.update_item(cat_element[0], cat_element[1], edit_element.get_element_text())
             self.clear_populate_elements_list(self.selected_category)

@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>New Category/Element</string>
+   <string>Add/Edit Element</string>
   </property>
   <property name="windowIcon">
    <iconset>

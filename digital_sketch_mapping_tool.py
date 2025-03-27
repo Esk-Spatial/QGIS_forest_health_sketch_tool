@@ -372,7 +372,11 @@ class DigitalSketchMappingTool:
         """Setup digitizing mode with automated attribute handling"""
         # Make layer active and editable
         if layer is None:
+            self.iface.messageBar().pushMessage("Error", f"There is no {layer_type} layer created/added",
+                                                level=Qgis.Critical, duration=5)
+            self.check_for_current_selection()
             return
+
         self.check_for_current_selection(layer_type)
         self.iface.setActiveLayer(layer)
         if self.digitizing_tool is not None:
@@ -459,6 +463,11 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def done_digitizing(self):
+        if self.pressed_btn is None:
+            self.iface.messageBar().pushMessage("Error", "There is no feature(s) created to be added",
+                                                level=Qgis.Critical, duration=5)
+            return
+
         QgsApplication.messageLog().logMessage("Done Digitizing is called", 'DigitalSketchPlugin')
         code_attr = self.feature_string if self.feature_string == self.get_code_txt() else self.get_code_txt()
         attributes = dict(colour=self.selected_colour, code=code_attr, surveyor=self.attributes['surveyor'],
@@ -596,6 +605,12 @@ class DigitalSketchMappingTool:
 
         if selection is not  None:
             self.pressed_btn = selection
+
+        elif selection is None:
+            self.pressed_btn = None
+            self.digital_sketch_widget.linePushButton.setChecked(False)
+            self.digital_sketch_widget.pointPushButton.setChecked(False)
+            self.digital_sketch_widget.polygonPushButton.setChecked(False)
 
     # --------------------------------------------------------------------------
 
