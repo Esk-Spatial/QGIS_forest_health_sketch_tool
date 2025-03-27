@@ -1,4 +1,5 @@
 import copy
+from PyQt5.QtCore import Qt
 
 _initial_data_ = [
   {"category": "BMAD", "selected": False, "colour": "#FFC0CB", "items": ["Discolour", "BMAD_L", "BMAD_M", "BMAD_H", "Stags", "Other"]},
@@ -94,7 +95,7 @@ class KeypadManager:
     def set_category_selection(self, category_name, state):
         category = self.get_category_by_name(category_name)
         if category:
-            selection = state == 2
+            selection = state == Qt.Checked
             category.selected = selection
 
     def set_category_colour(self, category_name, colour):

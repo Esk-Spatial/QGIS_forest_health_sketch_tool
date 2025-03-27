@@ -4,11 +4,11 @@ from qgis.PyQt import uic
 from qgis.core import QgsApplication
 import os
 
-FORM_CLASS, _ = uic.loadUiType(os.path.join(os.path.dirname(__file__), "edit_element.ui"))
+FORM_CLASS, _ = uic.loadUiType(os.path.join(os.path.dirname(__file__), "add_or_edit_element.ui"))
 
-class EditElement(QDialog, FORM_CLASS):
-    def __init__(self, element_txt, parent=None):
-        super(EditElement, self).__init__(parent)
+class AddOrEditElement(QDialog, FORM_CLASS):
+    def __init__(self, element_txt="", parent=None):
+        super(AddOrEditElement, self).__init__(parent)
         self.element_txt = element_txt
         self.setupUi(self)
 

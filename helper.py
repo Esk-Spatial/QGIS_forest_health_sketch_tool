@@ -32,9 +32,9 @@ def create_geopackage_file(path, crs=None):
         spatial_ref.ImportFromEPSG(4326)  # WGS 84
 
     # Create layers
-    point_layer = gpkg_file.CreateLayer('points', srs=spatial_ref, geom_type=ogr.wkbPoint)
-    polygon_layer = gpkg_file.CreateLayer('polygons', srs=spatial_ref, geom_type=ogr.wkbPolygon)
-    line_layer = gpkg_file.CreateLayer('lines', srs=spatial_ref, geom_type=ogr.wkbMultiLineString)
+    point_layer = gpkg_file.CreateLayer('sketch-points', srs=spatial_ref, geom_type=ogr.wkbPoint)
+    polygon_layer = gpkg_file.CreateLayer('sketch-polygons', srs=spatial_ref, geom_type=ogr.wkbPolygon)
+    line_layer = gpkg_file.CreateLayer('sketch-lines', srs=spatial_ref, geom_type=ogr.wkbMultiLineString)
 
     for layer in [point_layer, polygon_layer, line_layer]:
         setup_layer_attr(layer)

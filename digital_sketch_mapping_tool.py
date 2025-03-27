@@ -99,6 +99,7 @@ class DigitalSketchMappingTool:
         self.feature_string = ""
         self.selected_colour = "#3dc61780"
         self.folder_location_set = False
+        self.use_existing = False
         self.point_layer = None
         self.line_layer = None
         self.polygon_layer = None
@@ -113,6 +114,9 @@ class DigitalSketchMappingTool:
         self.multiline_tool = None
         self.polygon_tool = None
         self.point_tool = None
+        self.point_style = os.path.join(os.path.dirname(__file__), "styles", "geolink_points_240325.qml")
+        self.polygon_style = os.path.join(os.path.dirname(__file__), "styles", "geolink_polygons_240325.qml")
+        self.line_style = os.path.join(os.path.dirname(__file__), "styles", "geolink_lines_240325.qml")
 
         self.bing_maps_url = (
             "https://t0.tiles.virtualearth.net/tiles/a{q}.jpeg?g=685&mkt=en-us&n=z"
@@ -290,6 +294,29 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
+    def set_layer_from_existing(self):
+        existing_layers = QgsProject.instance().mapLayers(validOnly=True)
+        layer_tree = QgsProject.instance().layerTreeRoot()
+        enabled_layers = {
+            l_id: layer
+            for l_id, layer in existing_layers.items()
+            if (layer_tree.findLayer(l_id) and
+                layer_tree.findLayer(l_id).isVisible() and
+                layer.__class__.__name__ == 'QgsVectorLayer') and
+               "sketch-" in layer.name()
+        }
+        for l_id, layer in enabled_layers.items():
+            if 'sketch-points' in layer.name():
+                self.point_layer = layer
+            elif 'sketch-polygons' in layer.name():
+                self.polygon_layer = layer
+            elif 'sketch-lines' in layer.name():
+                self.line_layer = layer
+
+        self.set_style_and_digitizing_tool()
+
+    # --------------------------------------------------------------------------
+
     def load_bing_maps(self):
         # Load Bing Maps XYZ layer
         xyz_uri = f"type=xyz&url={self.bing_maps_url}&zmax=18&zmin=0&http-header:referer="
@@ -372,7 +399,11 @@ class DigitalSketchMappingTool:
         """Setup digitizing mode with automated attribute handling"""
         # Make layer active and editable
         if layer is None:
+            self.iface.messageBar().pushMessage("Error", f"There is no {layer_type} layer created/added",
+                                                level=Qgis.Critical, duration=5)
+            self.check_for_current_selection()
             return
+
         self.check_for_current_selection(layer_type)
         self.iface.setActiveLayer(layer)
         if self.digitizing_tool is not None:
@@ -454,11 +485,18 @@ class DigitalSketchMappingTool:
             if not self.folder_location_set and self.attributes['folder_path'] is not None:
                 self.folder_location_set = True
                 self.set_folder_location()
+            elif self.use_existing != self.attributes['use_existing']:
+                self.set_layer_from_existing()
             self.populate_categories()
 
     # --------------------------------------------------------------------------
 
     def done_digitizing(self):
+        if self.pressed_btn is None:
+            self.iface.messageBar().pushMessage("Error", "There is no feature(s) created to be added",
+                                                level=Qgis.Critical, duration=5)
+            return
+
         QgsApplication.messageLog().logMessage("Done Digitizing is called", 'DigitalSketchPlugin')
         code_attr = self.feature_string if self.feature_string == self.get_code_txt() else self.get_code_txt()
         attributes = dict(colour=self.selected_colour, code=code_attr, surveyor=self.attributes['surveyor'],
@@ -562,23 +600,15 @@ class DigitalSketchMappingTool:
         crs_ors = str(self.canvas.mapSettings().destinationCrs().toProj())
         create_geopackage_file(gpkg_file_name, crs_ors)
 
-        self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=points", "points", "ogr")
-        self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=lines", "lines", "ogr")
-        self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=polygons", "polygons", "ogr")
-
-        self.point_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "styles",  "geolink_points_240325.qml"))
-        self.polygon_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "styles",  "geolink_polygons_240325.qml"))
-        self.line_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "styles", "geolink_lines_240325.qml"))
+        self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-points", "points", "ogr")
+        self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-lines", "lines", "ogr")
+        self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-polygons", "polygons", "ogr")
 
         QgsProject.instance().addMapLayer(self.point_layer)
         QgsProject.instance().addMapLayer(self.line_layer)
         QgsProject.instance().addMapLayer(self.polygon_layer)
 
-        self.point_tool = StreamDigitizingTool(self.iface, self.point_layer, 'points')
-        self.polygon_tool = StreamDigitizingTool(self.iface, self.polygon_layer, 'polygons')
-        self.multiline_tool = MultiLineDigitizingTool(self.iface, self.line_layer)
-
-        self.canvas.refresh()
+        self.set_style_and_digitizing_tool()
 
     #--------------------------------------------------------------------------
 
@@ -596,6 +626,12 @@ class DigitalSketchMappingTool:
 
         if selection is not  None:
             self.pressed_btn = selection
+
+        elif selection is None:
+            self.pressed_btn = None
+            self.digital_sketch_widget.linePushButton.setChecked(False)
+            self.digital_sketch_widget.pointPushButton.setChecked(False)
+            self.digital_sketch_widget.polygonPushButton.setChecked(False)
 
     # --------------------------------------------------------------------------
 
@@ -641,6 +677,19 @@ class DigitalSketchMappingTool:
 
     def get_code_txt(self):
         return self.digital_sketch_widget.codeLineEdit.text().strip()
+
+    # --------------------------------------------------------------------------
+
+    def set_style_and_digitizing_tool(self):
+        self.point_layer.loadNamedStyle(self.point_style)
+        self.polygon_layer.loadNamedStyle(self.polygon_style)
+        self.line_layer.loadNamedStyle(self.line_style)
+
+        self.point_tool = StreamDigitizingTool(self.iface, self.point_layer, 'points')
+        self.polygon_tool = StreamDigitizingTool(self.iface, self.polygon_layer, 'polygons')
+        self.multiline_tool = MultiLineDigitizingTool(self.iface, self.line_layer)
+
+        self.canvas.refresh()
 
     # --------------------------------------------------------------------------
 
