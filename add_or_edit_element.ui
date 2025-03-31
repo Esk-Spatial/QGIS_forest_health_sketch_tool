@@ -150,6 +150,11 @@
           <height>40</height>
          </size>
         </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+         </font>
+        </property>
         <property name="text">
          <string>Discard</string>
         </property>
@@ -181,6 +186,11 @@
           <width>125</width>
           <height>40</height>
          </size>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+         </font>
         </property>
         <property name="text">
          <string>Apply</string>

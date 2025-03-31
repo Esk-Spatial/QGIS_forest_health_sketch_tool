@@ -73,6 +73,11 @@
           <height>40</height>
          </size>
         </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+         </font>
+        </property>
         <property name="text">
          <string>Reject</string>
         </property>
@@ -104,6 +109,11 @@
           <width>100</width>
           <height>40</height>
          </size>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+         </font>
         </property>
         <property name="text">
          <string>Confirm</string>
@@ -184,6 +194,11 @@
           <width>16777215</width>
           <height>35</height>
          </size>
+        </property>
+        <property name="font">
+         <font>
+          <pointsize>10</pointsize>
+         </font>
         </property>
         <property name="text">
          <string/>

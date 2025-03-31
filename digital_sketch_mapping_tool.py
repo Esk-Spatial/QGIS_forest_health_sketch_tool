@@ -109,6 +109,7 @@ class DigitalSketchMappingTool:
         self.attributes = None
         self.layers_saved = 0
         self.selected_attribute = None
+        self.highlight = None
         self.zoom_factor = 2
         self.zoom_tool = CustomZoomTool(self.iface, self.zoom_factor)
         self.multiline_tool = None
@@ -516,6 +517,7 @@ class DigitalSketchMappingTool:
                 self.created_layers_stack.remove({"type": layer_type, "fid": layer_fid})
             else:
                 self.selected_attribute = None
+                self.highlight = None
                 return
 
         else:
@@ -533,13 +535,13 @@ class DigitalSketchMappingTool:
             else:
                 return
 
-        if layer_type == "lines":
+        if "lines" in layer_type:
             self.delete_feature(self.line_layer, layer_fid)
 
-        elif layer_type == "points":
+        elif "points" in layer_type:
             self.delete_feature(self.point_layer, layer_fid)
 
-        elif layer_type == "polygons":
+        elif "polygons" in layer_type:
             self.delete_feature(self.polygon_layer, layer_fid)
 
     # --------------------------------------------------------------------------
@@ -549,6 +551,7 @@ class DigitalSketchMappingTool:
         layer.deleteFeature(fid)
         layer.commitChanges()
         self.selected_attribute = None
+        self.highlight = None
 
     # --------------------------------------------------------------------------
 
@@ -565,6 +568,7 @@ class DigitalSketchMappingTool:
 
     def remove_digitizing_tool(self):
         self.selected_attribute = None
+        self.highlight = None
         self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
         self.iface.mapCanvas().setMapTool(FeatureIdentifyTool(self.iface, self))
 
