@@ -110,6 +110,7 @@ class DigitalSketchMappingTool:
         self.layers_saved = 0
         self.selected_attribute = None
         self.highlight = None
+        self.vertex_marker = None
         self.zoom_factor = 2
         self.zoom_tool = CustomZoomTool(self.iface, self.zoom_factor)
         self.multiline_tool = None
@@ -518,6 +519,7 @@ class DigitalSketchMappingTool:
             else:
                 self.selected_attribute = None
                 self.highlight = None
+                self.vertex_marker = None
                 return
 
         else:
@@ -552,6 +554,7 @@ class DigitalSketchMappingTool:
         layer.commitChanges()
         self.selected_attribute = None
         self.highlight = None
+        self.vertex_marker = None
 
     # --------------------------------------------------------------------------
 
@@ -569,6 +572,7 @@ class DigitalSketchMappingTool:
     def remove_digitizing_tool(self):
         self.selected_attribute = None
         self.highlight = None
+        self.vertex_marker = None
         self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
         self.iface.mapCanvas().setMapTool(FeatureIdentifyTool(self.iface, self))
 

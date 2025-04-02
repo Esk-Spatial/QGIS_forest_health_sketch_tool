@@ -1,5 +1,5 @@
 from qgis.core import QgsProject, QgsApplication, QgsMarkerSymbol
-from qgis.gui import QgsMapTool, QgsMapMouseEvent, QgsMapToolIdentify, QgsHighlight
+from qgis.gui import QgsMapTool, QgsMapMouseEvent, QgsMapToolIdentify, QgsHighlight, QgsVertexMarker
 from PyQt5.QtCore import Qt
 from qgis.PyQt.QtGui import QColor
 
@@ -20,6 +20,7 @@ class FeatureIdentifyTool(QgsMapTool):
 
         if not results:
             QgsApplication.messageLog().logMessage("No feature clicked", "DigitalSketchPlugin")
+            self.remove_highlight()
             return
 
         for result in results:
@@ -27,8 +28,7 @@ class FeatureIdentifyTool(QgsMapTool):
             layer = result.mLayer  # Corresponding layer
             fid = feature.id()
             # attributes = feature.attributes()
-            if self.tool.highlight is not None:
-                self.tool.highlight.hide()
+            self.remove_highlight()
             self.highlight_feature(layer, feature)
             self.tool.selected_attribute = dict(type=layer.name(), fid=fid)
             self.tool.update_selected_layer_style()
@@ -36,24 +36,29 @@ class FeatureIdentifyTool(QgsMapTool):
             QgsApplication.messageLog().logMessage(f"Layer: {layer.name()}, Feature ID: {fid}", "DigitalSketchPlugin")
 
     def highlight_feature(self, layer, feature):
-        self.tool.highlight = QgsHighlight(self.canvas, feature.geometry(), layer)
-        self.tool.highlight.setColor(QColor(255, 0, 0, 100))  # Red with 100 alpha (semi-transparent)
-        self.tool.highlight.setWidth(3)
-        if "points" in layer.name():
-            point_size = 8  # Original point size, adjust as needed
-            highlight_size = point_size * 1.5  # 50% larger
 
-            # You can also use a different symbol altogether
-            symbol = QgsMarkerSymbol.createSimple({
-                'name': 'circle',
-                'color': 'red',
-                'size': str(highlight_size),
-                'outline_color': 'black',
-                'outline_width': '0.5'
-            })
-            self.tool.highlight.setSymbol(symbol)
+        if "points" in layer.name():
+            self.tool.vertex_marker = QgsVertexMarker(self.canvas)
+            point_geom = feature.geometry().asPoint()
+            self.tool.vertex_marker.setCenter(point_geom)
+            self.tool.vertex_marker.setIconType(QgsVertexMarker.ICON_CIRCLE)
+            self.tool.vertex_marker.setIconSize(12)
+            self.tool.vertex_marker.setColor(QColor(255, 0, 0, 100)) # Red with 100 alpha (semi-transparent)
+            self.tool.vertex_marker.setPenWidth(3)
 
         elif "polygons" in layer.name() or "lines" in layer.name():
+            self.tool.highlight = QgsHighlight(self.canvas, feature.geometry(), layer)
+            self.tool.highlight.setColor(QColor(255, 0, 0, 100))  # Red with 100 alpha (semi-transparent)
+            self.tool.highlight.setWidth(3)
+            self.tool.highlight.setWidth(3)
             self.tool.highlight.setFillColor(QColor(255, 0, 0, 50))  # Lighter red fill
+            self.tool.highlight.show()
 
-        self.tool.highlight.show()
+    def remove_highlight(self):
+        if self.tool.highlight is not None:
+            self.tool.highlight.hide()
+            self.tool.highlight = None
+
+        if self.tool.vertex_marker is not None:
+            self.canvas.scene().removeItem(self.tool.vertex_marker)
+            self.tool.vertex_marker = None
