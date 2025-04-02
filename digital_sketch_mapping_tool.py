@@ -109,6 +109,8 @@ class DigitalSketchMappingTool:
         self.attributes = None
         self.layers_saved = 0
         self.selected_attribute = None
+        self.highlight = None
+        self.vertex_marker = None
         self.zoom_factor = 2
         self.zoom_tool = CustomZoomTool(self.iface, self.zoom_factor)
         self.multiline_tool = None
@@ -305,6 +307,7 @@ class DigitalSketchMappingTool:
                 layer.__class__.__name__ == 'QgsVectorLayer') and
                "sketch-" in layer.name()
         }
+        QgsApplication.messageLog().logMessage(f'existing_layers {existing_layers}.', 'DigitalSketchPlugin')
         for l_id, layer in enabled_layers.items():
             if 'sketch-points' in layer.name():
                 self.point_layer = layer
@@ -362,9 +365,9 @@ class DigitalSketchMappingTool:
         if not attr_box.isEmpty():
             QgsApplication.messageLog().logMessage('Need to remove', 'DigitalSketchPlugin')
             while attr_box.count():
-                QgsApplication.messageLog().logMessage("looping and deleting", 'DigitalSketchPlugin')
                 item = attr_box.takeAt(0)
-                attr_box.removeWidget(item.widget())
+                if item.__class__.__name__ != 'QSpacerItem':
+                    attr_box.removeWidget(item.widget())
 
         for cat in categories:
             QgsApplication.messageLog().logMessage(f'colour: {cat.colour}', 'DigitalSketchPlugin')
@@ -449,7 +452,7 @@ class DigitalSketchMappingTool:
                                                 level=Qgis.Success)
 
         self.change_gps_settings(False)
-        self.remove_map_tool()
+        self.remove_digitizing_tool()
         self.check_for_current_selection()
 
     # --------------------------------------------------------------------------
@@ -515,6 +518,8 @@ class DigitalSketchMappingTool:
                 self.created_layers_stack.remove({"type": layer_type, "fid": layer_fid})
             else:
                 self.selected_attribute = None
+                self.highlight = None
+                self.vertex_marker = None
                 return
 
         else:
@@ -532,13 +537,13 @@ class DigitalSketchMappingTool:
             else:
                 return
 
-        if layer_type == "lines":
+        if "lines" in layer_type:
             self.delete_feature(self.line_layer, layer_fid)
 
-        elif layer_type == "points":
+        elif "points" in layer_type:
             self.delete_feature(self.point_layer, layer_fid)
 
-        elif layer_type == "polygons":
+        elif "polygons" in layer_type:
             self.delete_feature(self.polygon_layer, layer_fid)
 
     # --------------------------------------------------------------------------
@@ -548,6 +553,8 @@ class DigitalSketchMappingTool:
         layer.deleteFeature(fid)
         layer.commitChanges()
         self.selected_attribute = None
+        self.highlight = None
+        self.vertex_marker = None
 
     # --------------------------------------------------------------------------
 
@@ -562,8 +569,10 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def remove_map_tool(self):
+    def remove_digitizing_tool(self):
         self.selected_attribute = None
+        self.highlight = None
+        self.vertex_marker = None
         self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
         self.iface.mapCanvas().setMapTool(FeatureIdentifyTool(self.iface, self))
 
@@ -576,7 +585,7 @@ class DigitalSketchMappingTool:
         self.layers_saved += 1
         already_exist = {"type": layer_type, "fid": fid} in self.created_layers_stack
         if fid > 0 and not already_exist:
-            self.created_layers_stack.append({"type": layer_type, "fid": fid})
+            self.created_layers_stack.append({"type": layer.name(), "fid": fid})
 
         if layer_type == 'polygons':
             apply_symbology(layer, self.iface)
@@ -600,9 +609,9 @@ class DigitalSketchMappingTool:
         crs_ors = str(self.canvas.mapSettings().destinationCrs().toProj())
         create_geopackage_file(gpkg_file_name, crs_ors)
 
-        self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-points", "points", "ogr")
-        self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-lines", "lines", "ogr")
-        self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-polygons", "polygons", "ogr")
+        self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-points", "sketch-points", "ogr")
+        self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-lines", "sketch-lines", "ogr")
+        self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-polygons", "sketch-polygons", "ogr")
 
         QgsProject.instance().addMapLayer(self.point_layer)
         QgsProject.instance().addMapLayer(self.line_layer)
@@ -690,6 +699,28 @@ class DigitalSketchMappingTool:
         self.multiline_tool = MultiLineDigitizingTool(self.iface, self.line_layer)
 
         self.canvas.refresh()
+
+    # --------------------------------------------------------------------------
+
+    def update_selected_layer_style(self):
+        layer_type = self.selected_attribute["type"]
+        layer_fid = self.selected_attribute["fid"]
+
+        layer = None
+        if "lines" in layer_type:
+            layer = self.line_layer
+        elif "points" in layer_type:
+            layer = self.point_layer
+
+        elif "polygons" in layer_type:
+            layer = self.polygon_layer
+
+        layer.startEditing()
+        QgsApplication.messageLog().logMessage(f"layer.fields() {layer.fields()}", 'DigitalSketchPlugin')
+
+        # layer.dataProvider().changeAttributeValues({
+        #     layer_fid: {layer.fields().lookupField('style'): 'highlight'}
+        # })
 
     # --------------------------------------------------------------------------
 
