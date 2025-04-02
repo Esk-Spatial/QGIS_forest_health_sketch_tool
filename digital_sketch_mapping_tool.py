@@ -365,9 +365,9 @@ class DigitalSketchMappingTool:
         if not attr_box.isEmpty():
             QgsApplication.messageLog().logMessage('Need to remove', 'DigitalSketchPlugin')
             while attr_box.count():
-                QgsApplication.messageLog().logMessage("looping and deleting", 'DigitalSketchPlugin')
                 item = attr_box.takeAt(0)
-                attr_box.removeWidget(item.widget())
+                if item.__class__.__name__ != 'QSpacerItem':
+                    attr_box.removeWidget(item.widget())
 
         for cat in categories:
             QgsApplication.messageLog().logMessage(f'colour: {cat.colour}', 'DigitalSketchPlugin')
