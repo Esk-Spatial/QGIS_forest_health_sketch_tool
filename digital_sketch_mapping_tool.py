@@ -119,6 +119,8 @@ class DigitalSketchMappingTool:
         self.point_style = os.path.join(os.path.dirname(__file__), "styles", "geolink_points_240325.qml")
         self.polygon_style = os.path.join(os.path.dirname(__file__), "styles", "geolink_polygons_240325.qml")
         self.line_style = os.path.join(os.path.dirname(__file__), "styles", "geolink_lines_240325.qml")
+        self.clicked_buttons = set()
+        self.text_changed = False
 
         self.bing_maps_url = (
             "https://t0.tiles.virtualearth.net/tiles/a{q}.jpeg?g=685&mkt=en-us&n=z"
@@ -276,6 +278,9 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
         self.digital_sketch_widget.deletePushButton.clicked.connect(self.remove_feature)
 
+        self.digital_sketch_widget.codeLineEdit.textEdited.connect(lambda text: self.code_text_changed(text))
+        self.digital_sketch_widget.codeLineEdit.editingFinished.connect(self.code_text_changed_finished)
+
         self.digital_sketch_widget.linePushButton.clicked.connect(
             lambda: self.setup_digitizing(self.line_layer, 'lines'))
         self.digital_sketch_widget.pointPushButton.clicked.connect(
@@ -384,17 +389,21 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def button_clicked(self, button_name):
+    def button_clicked(self, button_name, btn):
+        if self.text_changed:
+            btn.setChecked(False)
+        else:
+            btn.setChecked(True)
+        self.clicked_buttons.add(btn)
         if self.feature_string == "":
             self.feature_string = button_name
 
-        elif button_name not in self.feature_string:
+        # elif button_name not in self.feature_string:
+        #     self.feature_string = f'{self.feature_string}{button_name}'
+        else:
             self.feature_string = f'{self.feature_string}{button_name}'
 
         self.update_code_line_edit()
-
-        QgsApplication.messageLog().logMessage(
-            f'clicked button {button_name} feature_string {self.feature_string}.', 'DigitalSketchPlugin')
 
     # --------------------------------------------------------------------------
 
@@ -501,10 +510,27 @@ class DigitalSketchMappingTool:
             return
 
         QgsApplication.messageLog().logMessage("Done Digitizing is called", 'DigitalSketchPlugin')
-        code_attr = self.feature_string if self.feature_string == self.get_code_txt() else self.get_code_txt()
+        self.clicked_buttons.clear()
+        self.text_changed = False
+        code_attr = self.feature_string if not self.text_changed else self.get_code_txt()
         attributes = dict(colour=self.selected_colour, code=code_attr, surveyor=self.attributes['surveyor'],
                           type_txt=self.attributes['type_txt'])
         self.digitizing_tool.save_feature(attributes)
+
+    # --------------------------------------------------------------------------
+
+    def code_text_changed(self, text):
+        self.text_changed = True
+        if len(self.clicked_buttons) >= 1:
+            for btn in self.clicked_buttons:
+                btn.setChecked(False)
+            self.clicked_buttons.clear()
+
+    # --------------------------------------------------------------------------
+
+    def code_text_changed_finished(self):
+        QgsApplication.messageLog().logMessage("text changed finished", 'DigitalSketchPlugin')
+        self.feature_string = self.get_code_txt()
 
     # --------------------------------------------------------------------------
 
@@ -666,9 +692,12 @@ class DigitalSketchMappingTool:
                             QPushButton:hover {{
                                 background-color: {light_colour};
                             }}
+                            QPushButton:checked {{
+                                border: 2px solid black
+                            }}
                             """)
             layout.addWidget(btn)
-            btn.clicked.connect(lambda checked, btn_name=item: self.button_clicked(btn_name))
+            btn.clicked.connect(lambda checked, btn_name=item, clicked_btn=btn: self.button_clicked(btn_name, clicked_btn))
             layout.setContentsMargins(2, 2, 2, 2)
             layout.setSpacing(5)
 
