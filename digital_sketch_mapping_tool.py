@@ -278,7 +278,7 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
         self.digital_sketch_widget.deletePushButton.clicked.connect(self.remove_feature)
 
-        self.digital_sketch_widget.codeLineEdit.textEdited.connect(lambda text: self.code_text_changed(text))
+        self.digital_sketch_widget.codeLineEdit.textEdited.connect(self.code_text_changed)
         self.digital_sketch_widget.codeLineEdit.editingFinished.connect(self.code_text_changed_finished)
 
         self.digital_sketch_widget.linePushButton.clicked.connect(
@@ -510,6 +510,7 @@ class DigitalSketchMappingTool:
             return
 
         QgsApplication.messageLog().logMessage("Done Digitizing is called", 'DigitalSketchPlugin')
+        self.clear_current_btn_selection()
         self.clicked_buttons.clear()
         self.text_changed = False
         code_attr = self.feature_string if not self.text_changed else self.get_code_txt()
@@ -519,8 +520,13 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def code_text_changed(self, text):
+    def code_text_changed(self):
         self.text_changed = True
+        self.clear_current_btn_selection()
+
+    # --------------------------------------------------------------------------
+
+    def clear_current_btn_selection(self):
         if len(self.clicked_buttons) >= 1:
             for btn in self.clicked_buttons:
                 btn.setChecked(False)
