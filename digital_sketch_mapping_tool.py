@@ -122,6 +122,7 @@ class DigitalSketchMappingTool:
         self.clicked_buttons = set()
         self.text_changed = False
         self.project_crs = None
+        self.feature_identify_tool = FeatureIdentifyTool(self.iface, self)
         self.bing_maps_url = (
             "https://t0.tiles.virtualearth.net/tiles/a{q}.jpeg?g=685&mkt=en-us&n=z"
         )
@@ -415,7 +416,7 @@ class DigitalSketchMappingTool:
                                                 level=Qgis.Critical, duration=5)
             self.check_for_current_selection()
             return
-
+        self.feature_identify_tool.remove_highlight()
         self.check_for_current_selection(layer_type)
         self.iface.setActiveLayer(layer)
         if self.digitizing_tool is not None:
@@ -606,8 +607,7 @@ class DigitalSketchMappingTool:
         self.highlight = None
         self.vertex_marker = None
         self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
-        self.iface.mapCanvas().setMapTool(FeatureIdentifyTool(self.iface, self))
-
+        self.iface.mapCanvas().setMapTool(self.feature_identify_tool)
     # --------------------------------------------------------------------------
 
     def process_layer_after_adding(self, fid, layer, layer_type):
