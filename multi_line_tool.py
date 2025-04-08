@@ -1,8 +1,9 @@
 from qgis.gui import QgsMapTool, QgsRubberBand
-from qgis.core import QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry, QgsMultiLineString, QgsLineString
+from qgis.core import (QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry, QgsMultiLineString, QgsLineString, QgsProject,
+                       QgsApplication)
 from PyQt5.QtCore import Qt
 
-from helper import update_feature_attributes
+from helper import update_feature_attributes, reproject_to_layer_crs
 
 
 class MultiLineDigitizingTool(QgsMapTool):
@@ -53,7 +54,14 @@ class MultiLineDigitizingTool(QgsMapTool):
         if not self.multi_line_segments:
             return
 
+        canvas_crs = QgsProject.instance().crs()
+        layer_crs = self.layer.crs()
+
         multi_line = self.get_multiline_string()
+
+        if canvas_crs != layer_crs:
+            multi_line = reproject_to_layer_crs(multi_line, canvas_crs, layer_crs)
+
         feature = QgsFeature(self.layer.fields())
         feature.setGeometry(QgsGeometry(multi_line))
 
