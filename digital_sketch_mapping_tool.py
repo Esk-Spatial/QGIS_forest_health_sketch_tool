@@ -121,7 +121,7 @@ class DigitalSketchMappingTool:
         self.line_style = os.path.join(os.path.dirname(__file__), "styles", "geolink_lines_240325.qml")
         self.clicked_buttons = set()
         self.text_changed = False
-
+        self.project_crs = None
         self.bing_maps_url = (
             "https://t0.tiles.virtualearth.net/tiles/a{q}.jpeg?g=685&mkt=en-us&n=z"
         )
@@ -637,9 +637,11 @@ class DigitalSketchMappingTool:
         QgsApplication.messageLog().logMessage(f'file name: {gpkg_file_name} file path: {gpkg_file_name}',
                                                'DigitalSketchPlugin')
 
-        # get project CRS information
-        crs_ors = str(self.canvas.mapSettings().destinationCrs().toProj())
-        create_geopackage_file(gpkg_file_name, crs_ors)
+        self.project_crs = str(self.canvas.mapSettings().destinationCrs().toProj())
+        if self.project_crs is None:
+            self.project_crs = '+proj=longlat +datum=WGS84 +no_defs'
+
+        create_geopackage_file(gpkg_file_name, self.project_crs)
 
         self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-points", "sketch-points", "ogr")
         self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-lines", "sketch-lines", "ogr")

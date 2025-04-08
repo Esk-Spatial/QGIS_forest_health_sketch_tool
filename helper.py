@@ -14,6 +14,7 @@ except ImportError:
     import osr
 
 from qgis.PyQt.QtGui import QColor
+from qgis.core import QgsCoordinateTransform, QgsProject, QgsApplication
 
 def create_geopackage_file(path, crs=None):
 
@@ -26,10 +27,7 @@ def create_geopackage_file(path, crs=None):
         return False
 
     spatial_ref = osr.SpatialReference()
-    if crs is not None:
-        spatial_ref.ImportFromProj4(crs)
-    else:
-        spatial_ref.ImportFromEPSG(4326)  # WGS 84
+    spatial_ref.ImportFromProj4(crs)
 
     # Create layers
     point_layer = gpkg_file.CreateLayer('sketch-points', srs=spatial_ref, geom_type=ogr.wkbPoint)
@@ -126,3 +124,13 @@ def update_feature_attributes(feature, layer_type, attributes):
 def show_delete_confirmation(text):
     delete_confirmation =  DeleteConfirmationDialog(text)
     return delete_confirmation.exec_()
+
+def reproject_to_layer_crs(geometry, source_crs, destination_crs):
+    transform = QgsCoordinateTransform(source_crs, destination_crs, QgsProject.instance())
+    try:
+        geometry.transform(transform)
+    except Exception as e:
+        QgsApplication.messageLog().logMessage(f'Geometry transform failed: {e}', 'DigitalSketchPlugin')
+        return
+
+    return geometry

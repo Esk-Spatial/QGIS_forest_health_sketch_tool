@@ -1,9 +1,9 @@
 
 from qgis.gui import QgsMapTool, QgsRubberBand
-from qgis.core import QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry, QgsApplication
+from qgis.core import QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry, QgsApplication, QgsProject
 from PyQt5.QtCore import Qt
 
-from helper import update_feature_attributes
+from helper import update_feature_attributes, reproject_to_layer_crs
 
 
 class StreamDigitizingTool(QgsMapTool):
@@ -53,6 +53,12 @@ class StreamDigitizingTool(QgsMapTool):
         self.digitizing = False
         geom = QgsGeometry.fromPolygonXY([self.stream_points])
 
+        canvas_crs = QgsProject.instance().crs()
+        layer_crs = self.layer.crs()
+
+        if canvas_crs != layer_crs:
+            geom = reproject_to_layer_crs(geom, canvas_crs, layer_crs)
+
         feature = QgsFeature(self.layer.fields())
         feature.setGeometry(geom)
         self.pending_features.append(feature)
@@ -63,8 +69,14 @@ class StreamDigitizingTool(QgsMapTool):
         self.rubber_band.addPoint(point, True)
         self.rubber_band.show()
 
+        canvas_crs = QgsProject.instance().crs()
+        layer_crs = self.layer.crs()
+        geom = QgsGeometry.fromPointXY(point)
+        if canvas_crs != layer_crs:
+            geom = reproject_to_layer_crs(geom, canvas_crs, layer_crs)
+
         feature = QgsFeature(self.layer.fields())
-        feature.setGeometry(QgsGeometry.fromPointXY(point))
+        feature.setGeometry(geom)
         self.pending_features.append(feature)
 
     def save_feature(self, attributes):
