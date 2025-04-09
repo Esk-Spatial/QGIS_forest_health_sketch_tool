@@ -36,7 +36,8 @@ from qgis.core import (QgsApplication, QgsFields, QgsCoordinateReferenceSystem, 
 from datetime import datetime
 
 from custom_zoom_tool import CustomZoomTool
-from helper import create_geopackage_file, split_array_to_chunks, adjust_color, show_delete_confirmation
+from helper import create_geopackage_file, split_array_to_chunks, adjust_color, show_delete_confirmation, \
+    get_existing_layers
 from qgis.core import (QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer,
                        QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis)
 
@@ -131,7 +132,8 @@ class DigitalSketchMappingTool:
         # Location coordinates (longitude, latitude)
         self.location_lon = 151.2093
         self.location_lat = -33.8688
-
+        self.iface.newProjectCreated.connect(self.on_project_create_or_read)
+        self.iface.projectRead.connect(self.on_project_create_or_read)
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
 
@@ -291,6 +293,23 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
+    def on_project_create_or_read(self):
+        QgsApplication.messageLog().logMessage('project create/read', 'DigitalSketchPlugin')
+        self.folder_location_set = False
+        self.use_existing = False
+        if self.attributes is not None:
+            self.attributes["project_changed"] = True
+
+    # --------------------------------------------------------------------------
+
+    def remove_layers(self):
+        layers = get_existing_layers()
+        for l_id in layers:
+            QgsProject.instance().removeMapLayer(l_id)
+
+
+    # --------------------------------------------------------------------------
+
     def set_folder_location(self):
         folder = self.attributes['folder_path']
         QgsApplication.messageLog().logMessage(f'Directory path {folder}.', 'DigitalSketchPlugin')
@@ -302,25 +321,11 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def set_layer_from_existing(self):
-        existing_layers = QgsProject.instance().mapLayers(validOnly=True)
-        layer_tree = QgsProject.instance().layerTreeRoot()
-        enabled_layers = {
-            l_id: layer
-            for l_id, layer in existing_layers.items()
-            if (layer_tree.findLayer(l_id) and
-                layer_tree.findLayer(l_id).isVisible() and
-                layer.__class__.__name__ == 'QgsVectorLayer') and
-               "sketch-" in layer.name()
-        }
-        QgsApplication.messageLog().logMessage(f'existing_layers {existing_layers}.', 'DigitalSketchPlugin')
-        for l_id, layer in enabled_layers.items():
-            if 'sketch-points' in layer.name():
-                self.point_layer = layer
-            elif 'sketch-polygons' in layer.name():
-                self.polygon_layer = layer
-            elif 'sketch-lines' in layer.name():
-                self.line_layer = layer
+    def set_layer_from_existing(self, layers):
+        self.use_existing =True
+        self.point_layer = layers['points']
+        self.polygon_layer = layers['polygons']
+        self.line_layer = layers['lines']
 
         self.set_style_and_digitizing_tool()
 
@@ -372,7 +377,9 @@ class DigitalSketchMappingTool:
             QgsApplication.messageLog().logMessage('Need to remove', 'DigitalSketchPlugin')
             while attr_box.count():
                 item = attr_box.takeAt(0)
+                QgsApplication.messageLog().logMessage(f"class {item.__class__.__name__ }: {item.__class__.__name__ != 'QSpacerItem'}", 'DigitalSketchPlugin')
                 if item.__class__.__name__ != 'QSpacerItem':
+                    QgsApplication.messageLog().logMessage('removing item', 'DigitalSketchPlugin')
                     attr_box.removeWidget(item.widget())
 
         for cat in categories:
@@ -495,11 +502,15 @@ class DigitalSketchMappingTool:
         if settings_dialog.exec_() == QDialog.Accepted:
             self.attributes = settings_dialog.get_attributes()
             self.selected_colour = self.attributes['feature_colour']
-            if not self.folder_location_set and self.attributes['folder_path'] is not None:
+
+            if self.attributes['new_project']:
+                self.remove_layers()
+                self.set_folder_location()
+            elif not self.folder_location_set and self.attributes['folder_path'] is not None:
                 self.folder_location_set = True
                 self.set_folder_location()
             elif self.use_existing != self.attributes['use_existing']:
-                self.set_layer_from_existing()
+                self.set_layer_from_existing(self.attributes['layers'])
             self.populate_categories()
 
     # --------------------------------------------------------------------------
@@ -727,13 +738,17 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def set_style_and_digitizing_tool(self):
-        self.point_layer.loadNamedStyle(self.point_style)
-        self.polygon_layer.loadNamedStyle(self.polygon_style)
-        self.line_layer.loadNamedStyle(self.line_style)
+        if self.point_layer is not None:
+            self.point_layer.loadNamedStyle(self.point_style)
+            self.point_tool = StreamDigitizingTool(self.iface, self.point_layer, 'points')
 
-        self.point_tool = StreamDigitizingTool(self.iface, self.point_layer, 'points')
-        self.polygon_tool = StreamDigitizingTool(self.iface, self.polygon_layer, 'polygons')
-        self.multiline_tool = MultiLineDigitizingTool(self.iface, self.line_layer)
+        if self.polygon_layer is not None:
+            self.polygon_layer.loadNamedStyle(self.polygon_style)
+            self.polygon_tool = StreamDigitizingTool(self.iface, self.polygon_layer, 'polygons')
+
+        if self.line_layer is not None:
+            self.line_layer.loadNamedStyle(self.line_style)
+            self.multiline_tool = MultiLineDigitizingTool(self.iface, self.line_layer)
 
         self.canvas.refresh()
 
