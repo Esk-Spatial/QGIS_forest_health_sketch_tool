@@ -134,3 +134,30 @@ def reproject_to_layer_crs(geometry, source_crs, destination_crs):
         return
 
     return geometry
+
+def get_existing_enabled_layers():
+    existing_layers = QgsProject.instance().mapLayers(validOnly=True)
+    layer_tree = QgsProject.instance().layerTreeRoot()
+    enabled_layers = {
+        l_id: layer
+        for l_id, layer in existing_layers.items()
+        if (layer_tree.findLayer(l_id) and
+            layer_tree.findLayer(l_id).isVisible() and
+            layer.__class__.__name__ == 'QgsVectorLayer') and
+           "sketch-" in layer.name()
+    }
+
+    return enabled_layers
+
+def get_existing_layers():
+    existing_layers = QgsProject.instance().mapLayers(validOnly=True)
+    layer_tree = QgsProject.instance().layerTreeRoot()
+    enabled_layers = {
+        l_id: layer
+        for l_id, layer in existing_layers.items()
+        if (layer_tree.findLayer(l_id) and
+            layer.__class__.__name__ == 'QgsVectorLayer') and
+           "sketch-" in layer.name()
+    }
+
+    return enabled_layers

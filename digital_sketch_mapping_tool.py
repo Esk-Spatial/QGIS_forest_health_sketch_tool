@@ -36,7 +36,8 @@ from qgis.core import (QgsApplication, QgsFields, QgsCoordinateReferenceSystem, 
 from datetime import datetime
 
 from custom_zoom_tool import CustomZoomTool
-from helper import create_geopackage_file, split_array_to_chunks, adjust_color, show_delete_confirmation
+from helper import create_geopackage_file, split_array_to_chunks, adjust_color, show_delete_confirmation, \
+    get_existing_layers
 from qgis.core import (QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer,
                        QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis)
 
@@ -131,7 +132,8 @@ class DigitalSketchMappingTool:
         # Location coordinates (longitude, latitude)
         self.location_lon = 151.2093
         self.location_lat = -33.8688
-
+        self.iface.newProjectCreated.connect(self.on_project_create_or_read)
+        self.iface.projectRead.connect(self.on_project_create_or_read)
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
 
@@ -291,6 +293,23 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
+    def on_project_create_or_read(self):
+        QgsApplication.messageLog().logMessage('project create/read', 'DigitalSketchPlugin')
+        self.folder_location_set = False
+        self.use_existing = False
+        if self.attributes is not None:
+            self.attributes["project_changed"] = True
+
+    # --------------------------------------------------------------------------
+
+    def remove_layers(self):
+        layers = get_existing_layers()
+        for l_id in layers:
+            QgsProject.instance().removeMapLayer(l_id)
+
+
+    # --------------------------------------------------------------------------
+
     def set_folder_location(self):
         folder = self.attributes['folder_path']
         QgsApplication.messageLog().logMessage(f'Directory path {folder}.', 'DigitalSketchPlugin')
@@ -302,25 +321,11 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def set_layer_from_existing(self):
-        existing_layers = QgsProject.instance().mapLayers(validOnly=True)
-        layer_tree = QgsProject.instance().layerTreeRoot()
-        enabled_layers = {
-            l_id: layer
-            for l_id, layer in existing_layers.items()
-            if (layer_tree.findLayer(l_id) and
-                layer_tree.findLayer(l_id).isVisible() and
-                layer.__class__.__name__ == 'QgsVectorLayer') and
-               "sketch-" in layer.name()
-        }
-        QgsApplication.messageLog().logMessage(f'existing_layers {existing_layers}.', 'DigitalSketchPlugin')
-        for l_id, layer in enabled_layers.items():
-            if 'sketch-points' in layer.name():
-                self.point_layer = layer
-            elif 'sketch-polygons' in layer.name():
-                self.polygon_layer = layer
-            elif 'sketch-lines' in layer.name():
-                self.line_layer = layer
+    def set_layer_from_existing(self, layers):
+        self.use_existing =True
+        self.point_layer = layers['points']
+        self.polygon_layer = layers['polygons']
+        self.line_layer = layers['lines']
 
         self.set_style_and_digitizing_tool()
 
@@ -370,10 +375,14 @@ class DigitalSketchMappingTool:
         attr_box = self.digital_sketch_widget.categoryAttrVerticalLayout
         if not attr_box.isEmpty():
             QgsApplication.messageLog().logMessage('Need to remove', 'DigitalSketchPlugin')
+            count = attr_box.count()
+            if count > 0 and attr_box.itemAt(count - 1).spacerItem() is not None:
+                attr_box.takeAt(count - 1)  # Remove the existing spacer
             while attr_box.count():
                 item = attr_box.takeAt(0)
-                if item.__class__.__name__ != 'QSpacerItem':
-                    attr_box.removeWidget(item.widget())
+                widget = item.widget()
+                if widget is not None:
+                    widget.deleteLater()
 
         for cat in categories:
             QgsApplication.messageLog().logMessage(f'colour: {cat.colour}', 'DigitalSketchPlugin')
@@ -386,9 +395,9 @@ class DigitalSketchMappingTool:
             else:
                 attr_box.addWidget(self.populate_buttons_from_list(cat.items, cat.colour))
 
-        attr_box.addSpacerItem(QSpacerItem(40, 30, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        attr_box.addStretch()
 
-    # --------------------------------------------------------------------------
+        # --------------------------------------------------------------------------
 
     def button_clicked(self, button_name, btn):
         if self.text_changed:
@@ -412,7 +421,7 @@ class DigitalSketchMappingTool:
         """Setup digitizing mode with automated attribute handling"""
         # Make layer active and editable
         if layer is None:
-            self.iface.messageBar().pushMessage("Error", f"There is no {layer_type} layer created/added",
+            self.iface.messageBar().pushMessage("Error", f"There is no {layer_type} layer created/added. Use the Settings button to assign existing layers to be used by the sketch tool or to create a new project.",
                                                 level=Qgis.Critical, duration=5)
             self.check_for_current_selection()
             return
@@ -495,11 +504,15 @@ class DigitalSketchMappingTool:
         if settings_dialog.exec_() == QDialog.Accepted:
             self.attributes = settings_dialog.get_attributes()
             self.selected_colour = self.attributes['feature_colour']
-            if not self.folder_location_set and self.attributes['folder_path'] is not None:
+
+            if self.attributes['new_project']:
+                self.remove_layers()
+                self.set_folder_location()
+            elif not self.folder_location_set and self.attributes['folder_path'] is not None:
                 self.folder_location_set = True
                 self.set_folder_location()
             elif self.use_existing != self.attributes['use_existing']:
-                self.set_layer_from_existing()
+                self.set_layer_from_existing(self.attributes['layers'])
             self.populate_categories()
 
     # --------------------------------------------------------------------------
@@ -546,13 +559,13 @@ class DigitalSketchMappingTool:
             QgsApplication.messageLog().logMessage(f"{self.selected_attribute}", 'DigitalSketchPlugin')
             layer_type = self.selected_attribute["type"]
             layer_fid = self.selected_attribute["fid"]
-
-            if show_delete_confirmation(f'{layer_type} Feature: {layer_fid}') == QDialog.Accepted:
-                self.created_layers_stack.remove({"type": layer_type, "fid": layer_fid})
+            layer_code = self.selected_attribute["code"]
+            if show_delete_confirmation(f'selected feature?\n(Layer: {layer_type} Code: {layer_code})') == QDialog.Accepted:
+                if {"type": layer_type, "fid": layer_fid, "code": layer_code} in self.created_layers_stack:
+                    self.created_layers_stack.remove({"type": layer_type, "fid": layer_fid, "code": layer_code})
             else:
                 self.selected_attribute = None
-                self.highlight = None
-                self.vertex_marker = None
+                self.feature_identify_tool.remove_highlight()
                 return
 
         else:
@@ -564,7 +577,8 @@ class DigitalSketchMappingTool:
             last_layer = self.created_layers_stack[last_index]
             layer_type = last_layer["type"]
             layer_fid = last_layer["fid"]
-            if show_delete_confirmation(f'{layer_type} Feature: {layer_fid}') == QDialog.Accepted:
+            layer_code = last_layer["code"]
+            if show_delete_confirmation(f'most recent feature?\n(Layer: {layer_type} Code: {layer_code})') == QDialog.Accepted:
                 self.created_layers_stack.pop()
                 QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
             else:
@@ -582,12 +596,11 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def delete_feature(self, layer, fid):
+        self.feature_identify_tool.remove_highlight()
         layer.startEditing()
         layer.deleteFeature(fid)
         layer.commitChanges()
         self.selected_attribute = None
-        self.highlight = None
-        self.vertex_marker = None
 
     # --------------------------------------------------------------------------
 
@@ -612,12 +625,12 @@ class DigitalSketchMappingTool:
 
     def process_layer_after_adding(self, fid, layer, layer_type):
         """Automatically populate attributes for new features"""
-        QgsApplication.messageLog().logMessage(f'fid: {fid}', 'DigitalSketchPlugin')
-
+        feature = layer.getFeature(fid)
+        code = feature.attribute("Code")
         self.layers_saved += 1
-        already_exist = {"type": layer_type, "fid": fid} in self.created_layers_stack
+        already_exist = {"type": layer_type, "fid": fid, "code": code} in self.created_layers_stack
         if fid > 0 and not already_exist:
-            self.created_layers_stack.append({"type": layer.name(), "fid": fid})
+            self.created_layers_stack.append({"type": layer.name(), "fid": fid, "code": code})
 
         if layer_type == 'polygons':
             apply_symbology(layer, self.iface)
@@ -727,13 +740,17 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def set_style_and_digitizing_tool(self):
-        self.point_layer.loadNamedStyle(self.point_style)
-        self.polygon_layer.loadNamedStyle(self.polygon_style)
-        self.line_layer.loadNamedStyle(self.line_style)
+        if self.point_layer is not None:
+            self.point_layer.loadNamedStyle(self.point_style)
+            self.point_tool = StreamDigitizingTool(self.iface, self.point_layer, 'points')
 
-        self.point_tool = StreamDigitizingTool(self.iface, self.point_layer, 'points')
-        self.polygon_tool = StreamDigitizingTool(self.iface, self.polygon_layer, 'polygons')
-        self.multiline_tool = MultiLineDigitizingTool(self.iface, self.line_layer)
+        if self.polygon_layer is not None:
+            self.polygon_layer.loadNamedStyle(self.polygon_style)
+            self.polygon_tool = StreamDigitizingTool(self.iface, self.polygon_layer, 'polygons')
+
+        if self.line_layer is not None:
+            self.line_layer.loadNamedStyle(self.line_style)
+            self.multiline_tool = MultiLineDigitizingTool(self.iface, self.line_layer)
 
         self.canvas.refresh()
 

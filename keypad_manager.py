@@ -111,3 +111,7 @@ class KeypadManager:
 
     def get_category_by_name(self, category_name):
         return next((cat for cat in self.data_cpy if cat.category == category_name), None)
+
+    def clear_selection(self):
+        for cat in self.data_cpy:
+            self.set_category_selection(cat.category, 0)

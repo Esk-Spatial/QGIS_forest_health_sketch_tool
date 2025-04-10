@@ -27,13 +27,11 @@ class FeatureIdentifyTool(QgsMapTool):
             feature = result.mFeature  # First identified feature
             layer = result.mLayer  # Corresponding layer
             fid = feature.id()
-            # attributes = feature.attributes()
+            code = feature.attribute("Code")
             self.remove_highlight()
             self.highlight_feature(layer, feature)
-            self.tool.selected_attribute = dict(type=layer.name(), fid=fid)
+            self.tool.selected_attribute = dict(type=layer.name(), fid=fid, code=code)
             self.tool.update_selected_layer_style()
-
-            QgsApplication.messageLog().logMessage(f"Layer: {layer.name()}, Feature ID: {fid}", "DigitalSketchPlugin")
 
     def highlight_feature(self, layer, feature):
 

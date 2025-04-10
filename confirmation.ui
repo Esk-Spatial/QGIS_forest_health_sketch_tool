@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>DeleteConfirmation</class>
- <widget class="QDialog" name="DeleteConfirmation">
+ <class>Confirmation</class>
+ <widget class="QDialog" name="Confirmation">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>504</width>
-    <height>145</height>
+    <width>376</width>
+    <height>132</height>
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Delete Confirmation</string>
+   <string>Confirmation</string>
   </property>
   <property name="windowIcon">
    <iconset>
@@ -132,13 +132,13 @@
      <property name="minimumSize">
       <size>
        <width>0</width>
-       <height>35</height>
+       <height>50</height>
       </size>
      </property>
      <property name="maximumSize">
       <size>
        <width>16777215</width>
-       <height>40</height>
+       <height>50</height>
       </size>
      </property>
      <property name="frameShape">
@@ -178,7 +178,7 @@
          <string/>
         </property>
         <property name="pixmap">
-         <pixmap>icons/buttons/triangle-exclamation-duotone-light.svg</pixmap>
+         <pixmap>icons/buttons/circle-question-solid.svg</pixmap>
         </property>
         <property name="scaledContents">
          <bool>true</bool>
@@ -190,13 +190,13 @@
         <property name="minimumSize">
          <size>
           <width>0</width>
-          <height>30</height>
+          <height>45</height>
          </size>
         </property>
         <property name="maximumSize">
          <size>
           <width>16777215</width>
-          <height>35</height>
+          <height>45</height>
          </size>
         </property>
         <property name="font">
@@ -205,7 +205,7 @@
          </font>
         </property>
         <property name="text">
-         <string/>
+         <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Are you sure you want to create a new project?&lt;br/&gt;This will remove existing digitized layers.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
         </property>
        </widget>
       </item>

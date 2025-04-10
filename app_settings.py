@@ -1,6 +1,7 @@
 
 from PyQt5.QtGui import QColor
-from qgis.PyQt.QtWidgets import QDialog, QCheckBox, QVBoxLayout, QScrollArea, QWidget, QListWidgetItem, QHBoxLayout, QLabel, QPushButton, QSpacerItem, QSizePolicy, QDialogButtonBox
+from qgis.PyQt.QtWidgets import (QDialog, QCheckBox, QVBoxLayout, QScrollArea, QWidget, QListWidgetItem, QHBoxLayout,
+                                 QLabel, QPushButton, QSpacerItem, QSizePolicy, QDialogButtonBox)
 from qgis.PyQt import uic
 from qgis.core import QgsApplication
 import os
@@ -8,8 +9,10 @@ from qgis.gui import QgsColorButton
 from PyQt5.QtCore import Qt
 
 from add_or_edit_element import AddOrEditElement
+from confirmation import ConfirmationDialog
 from helper import show_delete_confirmation
 from new_category import NewCategory
+from select_existing_layer import SelectExistingLayerDialog
 
 # Load the UI file dynamically
 FORM_CLASS, _ = uic.loadUiType(os.path.join(os.path.dirname(__file__), "app_settings.ui"))
@@ -39,6 +42,10 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.width = 150
         self.attributes = None
         self.use_existing_layer = False
+        self.layers = None
+        self.project_changed = False
+        self.new_project = False
+
 
         if attributes is not None:
             self.folder_location = attributes["folder_path"]
@@ -52,6 +59,9 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             self.heightLineEdit.setText(f'{attributes["height"]}')
             self.widthLineEdit.setText(f'{attributes["width"]}')
             self.useExistingLayerCheckBox.setChecked(attributes["use_existing"])
+            self.project_changed = attributes['project_changed'] if attributes['project_changed'] is not None else False
+            if attributes['project_changed']:
+                self.clear_selection()
 
         self.updated_settings = False
         self.clear_and_populate_categories()
@@ -65,6 +75,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.addCategoryPushButton.clicked.connect(lambda: self.add_category())
         self.addElementPushButton.clicked.connect(lambda: self.add_element())
 
+        self.newProjectPushButton.clicked.connect(self.create_new_project)
         self.applyPushButton.clicked.connect(self.apply_settings)
         self.discardPushButton.clicked.connect(self.discard_settings)
         self.mFontButton.changed.connect(self.font_changed)
@@ -113,9 +124,10 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         QgsApplication.messageLog().logMessage("apply_settings", 'DigitalSketchPlugin')
         self.updated_settings = True
         self.attributes = dict(folder_path=self.folder_location, use_existing=self.use_existing_layer,
-                               feature_colour=self.feature_colour, surveyor=self.surveyourLineEdit.text().strip(),
-                               type_txt=self.typeLineEdit.text().strip(), font=self.font, colour=self.colour,
-                               height=int(self.heightLineEdit.text().strip()), width=int(self.widthLineEdit.text().strip()))
+                               layers=self.layers, new_project=self.new_project, feature_colour=self.feature_colour,
+                               surveyor=self.surveyourLineEdit.text().strip(), type_txt=self.typeLineEdit.text().strip(),
+                               font=self.font, colour=self.colour, height=int(self.heightLineEdit.text().strip()),
+                               width=int(self.widthLineEdit.text().strip()), project_changed=self.project_changed)
         self.keypad_manager.update_dataset()
         self.accept()
 
@@ -243,6 +255,11 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
     def set_use_existing(self, state):
         self.use_existing_layer = state == Qt.Checked
+        if self.use_existing_layer:
+            layer_selection = SelectExistingLayerDialog()
+            if layer_selection.exec_() == QDialog.Accepted:
+                self.layers = layer_selection.get_layer_selection()
+
 
     def font_changed(self):
         self.font = self.mFontButton.currentFont()
@@ -270,3 +287,16 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         if show_delete_confirmation(f'Element: {cat_element[1]}') == QDialog.Accepted:
             self.keypad_manager.remove_item(cat_element[0], cat_element[1])
             self.clear_populate_elements_list(self.selected_category)
+
+    def create_new_project(self):
+        confirmation = ConfirmationDialog()
+        if confirmation.exec_() == QDialog.Accepted:
+            self.new_project = True
+            self.clear_selection()
+
+    def clear_selection(self):
+        self.folderQgsFileWidget.setFilePath('')
+        self.folderQgsFileWidget.setReadOnly(False)
+        self.useExistingLayerCheckBox.setChecked(False)
+        self.keypad_manager.clear_selection()
+        self.clear_and_populate_categories()
