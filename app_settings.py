@@ -1,6 +1,7 @@
 
 from PyQt5.QtGui import QColor
-from qgis.PyQt.QtWidgets import QDialog, QCheckBox, QVBoxLayout, QScrollArea, QWidget, QListWidgetItem, QHBoxLayout, QLabel, QPushButton, QSpacerItem, QSizePolicy, QDialogButtonBox
+from qgis.PyQt.QtWidgets import (QDialog, QCheckBox, QVBoxLayout, QScrollArea, QWidget, QListWidgetItem, QHBoxLayout,
+                                 QLabel, QPushButton, QSpacerItem, QSizePolicy, QDialogButtonBox)
 from qgis.PyQt import uic
 from qgis.core import QgsApplication
 import os
@@ -8,6 +9,7 @@ from qgis.gui import QgsColorButton
 from PyQt5.QtCore import Qt
 
 from add_or_edit_element import AddOrEditElement
+from confirmation import ConfirmationDialog
 from helper import show_delete_confirmation
 from new_category import NewCategory
 from select_existing_layer import SelectExistingLayerDialog
@@ -287,11 +289,14 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             self.clear_populate_elements_list(self.selected_category)
 
     def create_new_project(self):
-        self.new_project = True
-        self.clear_selection()
+        confirmation = ConfirmationDialog()
+        if confirmation.exec_() == QDialog.Accepted:
+            self.new_project = True
+            self.clear_selection()
 
     def clear_selection(self):
         self.folderQgsFileWidget.setFilePath('')
         self.folderQgsFileWidget.setReadOnly(False)
         self.useExistingLayerCheckBox.setChecked(False)
         self.keypad_manager.clear_selection()
+        self.clear_and_populate_categories()

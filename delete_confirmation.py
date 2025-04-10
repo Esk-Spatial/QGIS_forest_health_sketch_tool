@@ -12,7 +12,7 @@ class DeleteConfirmationDialog(QDialog, FORM_CLASS):
         super(DeleteConfirmationDialog, self).__init__(parent)
         self.setupUi(self)
 
-        self.txtLabel.setText(f'Are you sure you want to delete: {text}?')
+        self.txtLabel.setText(f'Are you sure you want to delete the {text}')
         self.confirmPushButton.clicked.connect(self.confirm_delete)
         self.rejectPushButton.clicked.connect(self.reject_delete)
 
