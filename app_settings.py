@@ -38,7 +38,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.colour = self.mColorButton.color().name(QColor.HexArgb)
         self.feature_colour = self.featureColorButton.color().name(QColor.HexArgb)
         self.font = self.mFontButton.currentFont()
-        self.height = 30
+        self.height = 26
         self.width = 150
         self.attributes = None
         self.use_existing_layer = False

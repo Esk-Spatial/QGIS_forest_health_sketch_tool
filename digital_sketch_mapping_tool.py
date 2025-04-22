@@ -25,7 +25,7 @@ import traceback
 from collections import deque
 
 from PyQt5.QtWidgets import QRadioButton, QStackedWidget
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QVariant
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QVariant, QMargins
 from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWidgets import (QAction, QFileDialog, QMessageBox, QPushButton, QVBoxLayout, QFileDialog, QDialog,
                                  QWidget, QHBoxLayout, QSpacerItem, QSizePolicy, QGroupBox, QScrollArea, QToolButton,
@@ -692,13 +692,18 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def populate_buttons_from_list(self, items, colour):
+        margin = QMargins(1,1,1,1)
         layout = QHBoxLayout()
+        layout.setContentsMargins(margin)
+        height = self.attributes["height"]
         widget = QWidget()
+        widget.setMinimumHeight(height + 1)
+        widget.setMaximumHeight(height + 1)
         light_colour = adjust_color(colour, 30)
         for item in items:
             btn = QPushButton(item)
-            btn.setMinimumHeight(self.attributes["height"])
-            btn.setMaximumHeight(self.attributes["height"])
+            btn.setMinimumHeight(height)
+            btn.setMaximumHeight(height)
             btn.setMinimumWidth(self.attributes["width"])
             btn.setMaximumWidth(self.attributes["width"])
             btn.setFont(self.attributes["font"])
@@ -708,7 +713,7 @@ class DigitalSketchMappingTool:
                                 background-color: {colour};
                                 color: {self.attributes["colour"]};
                                 border-radius: 5px;
-                                padding: 5px 5x;
+                                padding: 2px 2px;
                             }}
                             QPushButton:hover {{
                                 background-color: {light_colour};
@@ -719,8 +724,8 @@ class DigitalSketchMappingTool:
                             """)
             layout.addWidget(btn)
             btn.clicked.connect(lambda checked, btn_name=item, clicked_btn=btn: self.button_clicked(btn_name, clicked_btn))
-            layout.setContentsMargins(2, 2, 2, 2)
-            layout.setSpacing(5)
+            layout.setContentsMargins(1, 1, 1, 1)
+            layout.setSpacing(2)
 
         layout.addItem(QSpacerItem(40, 30, QSizePolicy.Expanding, QSizePolicy.Minimum))
         layout.insertStretch(-1, 100)
