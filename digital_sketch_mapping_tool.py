@@ -701,7 +701,7 @@ class DigitalSketchMappingTool:
         widget.setMaximumHeight(height + 1)
         light_colour = adjust_color(colour, 30)
         for item in items:
-            btn = QPushButton(item)
+            btn = QPushButton(item.item)
             btn.setMinimumHeight(height)
             btn.setMaximumHeight(height)
             btn.setMinimumWidth(self.attributes["width"])

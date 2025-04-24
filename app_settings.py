@@ -29,7 +29,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         super(AppSettingsDialog, self).__init__(parent)
         self.setupUi(self)
         self.keypad_manager = keypad_manager
-        keypad_manager.create_data_copy()
+        self.keypad_manager.load_data()
         self.categoryListWidget.itemSelectionChanged.connect(self.on_category_item_selected)
         self.elementListWidget.itemSelectionChanged.connect(self.on_element_item_selected)
         self.selected_category = ''
@@ -115,8 +115,8 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
         add_element = AddOrEditElement()
         if add_element.exec_() == QDialog.Accepted:
-            data = add_element.get_element_text()
-            if data != "":
+            data = add_element.get_item()
+            if data.item != "":
                 self.keypad_manager.add_item(self.selected_category, data)
                 self.clear_populate_elements_list(self.selected_category)
 
@@ -141,7 +141,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
     def clear_and_populate_categories(self):
         self.categoryListWidget.clear()
-        for pad in self.keypad_manager.data_cpy:
+        for pad in self.keypad_manager.data:
             item = QListWidgetItem(self.categoryListWidget)
             widget = QWidget()
             layout = QHBoxLayout()
@@ -193,17 +193,17 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
     def clear_populate_elements_list(self, category_name):
         self.elementListWidget.clear()
-        category = next((cat for cat in self.keypad_manager.data_cpy if cat.category == category_name), None)
+        category = next((cat for cat in self.keypad_manager.data if cat.category == category_name), None)
         if category:
             for element in category.items:
                 item = QListWidgetItem(self.elementListWidget)
                 widget = QWidget()
                 layout = QHBoxLayout()
-                label = QLabel(element)
+                label = QLabel(element.item)
                 label.setMinimumSize(50, 30)
 
                 space = QSpacerItem(40, 30, QSizePolicy.Expanding, QSizePolicy.Minimum)
-                obj_name = f'{category.category}:{element}'
+                obj_name = f'{category.category}:{element.item}'
 
                 # edit Button (QPushButton)
                 edit_button = QPushButton('Edit')
@@ -271,6 +271,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
     def delete_keypad_category(self, db):
         category = db.objectName()
         if show_delete_confirmation(f'Category: {category}') == QDialog.Accepted:
+            self.elementListWidget.clear()
             self.keypad_manager.remove_category(category)
             self.clear_and_populate_categories()
 
@@ -278,7 +279,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         cat_element = get_category_element(eb.objectName())
         edit_element = AddOrEditElement(cat_element[1])
         if edit_element.exec_() == QDialog.Accepted:
-            self.keypad_manager.update_item(cat_element[0], cat_element[1], edit_element.get_element_text())
+            self.keypad_manager.update_item(cat_element[0], cat_element[1], edit_element.get_item())
             self.clear_populate_elements_list(self.selected_category)
 
 
@@ -286,7 +287,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         cat_element = get_category_element(db.objectName())
         if show_delete_confirmation(f'Element: {cat_element[1]}') == QDialog.Accepted:
             self.keypad_manager.remove_item(cat_element[0], cat_element[1])
-            self.clear_populate_elements_list(self.selected_category)
+            self.clear_populate_elements_list(cat_element[0])
 
     def create_new_project(self):
         confirmation = ConfirmationDialog()
