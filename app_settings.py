@@ -27,6 +27,7 @@ def get_category_element(text):
 class AppSettingsDialog(QDialog, FORM_CLASS):
     def __init__(self, keypad_manager, attributes, parent=None):
         super(AppSettingsDialog, self).__init__(parent)
+        self.add_bing_imagery = False
         self.setupUi(self)
         self.keypad_manager = keypad_manager
         self.keypad_manager.load_data()
@@ -48,6 +49,9 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
 
         if attributes is not None:
+            self.projectNameLineEdit.setText(attributes["project_name"])
+            if attributes["project_name"] is not None and attributes["project_name"] != '':
+                self.projectNameLineEdit.setReadOnly(True)
             self.folder_location = attributes["folder_path"]
             self.folderQgsFileWidget.setFilePath(attributes["folder_path"])
             self.change_folder_ctrl_to_readonly(attributes["folder_path"])
@@ -62,6 +66,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             self.project_changed = attributes['project_changed'] if attributes['project_changed'] is not None else False
             if attributes['project_changed']:
                 self.clear_selection()
+            self.bingImageryCheckBox.setChecked(attributes["add_bing_imagery"])
 
         self.updated_settings = False
         self.clear_and_populate_categories()
@@ -83,6 +88,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.mColorButton.colorChanged.connect(self.colour_changed)
         self.folderQgsFileWidget.fileChanged.connect(self.set_folder_location)
         self.useExistingLayerCheckBox.stateChanged.connect(lambda state: self.set_use_existing(state))
+        self.bingImageryCheckBox.stateChanged.connect(lambda state: self.set_add_bing_imagery(state))
 
     def move_category(self, direction):
         QgsApplication.messageLog().logMessage(f"move_category: {direction}", 'DigitalSketchPlugin')
@@ -123,11 +129,13 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
     def apply_settings(self):
         QgsApplication.messageLog().logMessage("apply_settings", 'DigitalSketchPlugin')
         self.updated_settings = True
-        self.attributes = dict(folder_path=self.folder_location, use_existing=self.use_existing_layer,
-                               layers=self.layers, new_project=self.new_project, feature_colour=self.feature_colour,
-                               surveyor=self.surveyourLineEdit.text().strip(), type_txt=self.typeLineEdit.text().strip(),
-                               font=self.font, colour=self.colour, height=int(self.heightLineEdit.text().strip()),
-                               width=int(self.widthLineEdit.text().strip()), project_changed=self.project_changed)
+        self.attributes = dict(project_name=self.projectNameLineEdit.text().strip(), folder_path=self.folder_location,
+                               use_existing=self.use_existing_layer, layers=self.layers, new_project=self.new_project,
+                               feature_colour=self.feature_colour, surveyor=self.surveyourLineEdit.text().strip(),
+                               type_txt=self.typeLineEdit.text().strip(), font=self.font, colour=self.colour,
+                               height=int(self.heightLineEdit.text().strip()),
+                               width=int(self.widthLineEdit.text().strip()), project_changed=self.project_changed,
+                               add_bing_imagery=self.add_bing_imagery)
         self.keypad_manager.update_dataset()
         self.accept()
 
@@ -260,6 +268,9 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             if layer_selection.exec_() == QDialog.Accepted:
                 self.layers = layer_selection.get_layer_selection()
 
+    def set_add_bing_imagery(self, state):
+        self.add_bing_imagery = state == Qt.Checked
+
 
     def font_changed(self):
         self.font = self.mFontButton.currentFont()
@@ -296,6 +307,8 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             self.clear_selection()
 
     def clear_selection(self):
+        self.projectNameLineEdit.setText('')
+        self.projectNameLineEdit.setReadOnly(False)
         self.folderQgsFileWidget.setFilePath('')
         self.folderQgsFileWidget.setReadOnly(False)
         self.useExistingLayerCheckBox.setChecked(False)

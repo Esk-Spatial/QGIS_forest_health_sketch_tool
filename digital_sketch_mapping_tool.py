@@ -276,7 +276,7 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.zoomInPushButton.clicked.connect(lambda: self.zoom_to_map(True))
         self.digital_sketch_widget.zoomOutPushButton.clicked.connect(lambda: self.zoom_to_map(False))
 
-        self.digital_sketch_widget.savePushButton.clicked.connect(self.save_layers)
+        self.digital_sketch_widget.saveAndPanPushButton.clicked.connect(self.save_layers)
         self.digital_sketch_widget.settingPushButton.clicked.connect(self.open_settings)
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
         self.digital_sketch_widget.deletePushButton.clicked.connect(self.remove_feature)
@@ -315,8 +315,9 @@ class DigitalSketchMappingTool:
         QgsApplication.messageLog().logMessage(f'Directory path {folder}.', 'DigitalSketchPlugin')
         if folder:
             self.folder_location = folder
-            self.load_bing_maps()
-            self.create_geopackage_file()
+            if self.attributes['add_bing_imagery']:
+                self.load_bing_maps()
+            self.create_geopackage_file(self.attributes['project_name'])
             self.zoom_to_location()
 
     # --------------------------------------------------------------------------
@@ -371,7 +372,7 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def populate_categories(self):
-        categories = self.keypad_manager.get_selected_categories()
+        items = self.keypad_manager.get_checked_category_items()
         attr_box = self.digital_sketch_widget.categoryAttrVerticalLayout
         if not attr_box.isEmpty():
             QgsApplication.messageLog().logMessage('Need to remove', 'DigitalSketchPlugin')
@@ -384,17 +385,12 @@ class DigitalSketchMappingTool:
                 if widget is not None:
                     widget.deleteLater()
 
-        for cat in categories:
-            QgsApplication.messageLog().logMessage(f'colour: {cat.colour}', 'DigitalSketchPlugin')
-            if len(cat.items) > 2:
-                QgsApplication.messageLog().logMessage("items greater than 3", 'DigitalSketchPlugin')
-                chunks = split_array_to_chunks(cat.items)
-                for chunk in chunks:
-                    attr_box.addWidget(self.populate_buttons_from_list(chunk, cat.colour))
-
-            else:
-                attr_box.addWidget(self.populate_buttons_from_list(cat.items, cat.colour))
-
+        if len(items) > 2:
+            chunks = split_array_to_chunks(items)
+            for chunk in chunks:
+                attr_box.addWidget(self.populate_buttons_from_list(chunk))
+        else:
+            attr_box.addWidget(self.populate_buttons_from_list(items))
         attr_box.addStretch()
 
         # --------------------------------------------------------------------------
@@ -620,7 +616,17 @@ class DigitalSketchMappingTool:
         self.highlight = None
         self.vertex_marker = None
         self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
+        self.iface.actionPan().trigger()
+
+    # --------------------------------------------------------------------------
+
+    def setup_feature_identify_tool(self):
+        self.selected_attribute = None
+        self.highlight = None
+        self.vertex_marker = None
+        self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
         self.iface.mapCanvas().setMapTool(self.feature_identify_tool)
+
     # --------------------------------------------------------------------------
 
     def process_layer_after_adding(self, fid, layer, layer_type):
@@ -642,10 +648,10 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def create_geopackage_file(self):
+    def create_geopackage_file(self, project_name):
         QgsApplication.messageLog().logMessage('creating new gpkg file', 'DigitalSketchPlugin')
         date_time_str = datetime.now().strftime("%d-%m-%Y_%I-%M-%p")
-        gpkg_file_name = f"{date_time_str}.gpkg"
+        gpkg_file_name = f"{project_name}_{date_time_str}.gpkg"
         gpkg_file_name = os.path.join(self.folder_location, gpkg_file_name)
         QgsApplication.messageLog().logMessage(f'file name: {gpkg_file_name} file path: {gpkg_file_name}',
                                                'DigitalSketchPlugin')
@@ -656,9 +662,9 @@ class DigitalSketchMappingTool:
 
         create_geopackage_file(gpkg_file_name, self.project_crs)
 
-        self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-points", "sketch-points", "ogr")
-        self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-lines", "sketch-lines", "ogr")
-        self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-polygons", "sketch-polygons", "ogr")
+        self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-points", f"{project_name}-sketch-points", "ogr")
+        self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-lines", f"{project_name}-sketch-lines", "ogr")
+        self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-polygons", f"{project_name}-sketch-polygons", "ogr")
 
         QgsProject.instance().addMapLayer(self.point_layer)
         QgsProject.instance().addMapLayer(self.line_layer)
@@ -691,7 +697,7 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def populate_buttons_from_list(self, items, colour):
+    def populate_buttons_from_list(self, items):
         margin = QMargins(1,1,1,1)
         layout = QHBoxLayout()
         layout.setContentsMargins(margin)
@@ -699,9 +705,10 @@ class DigitalSketchMappingTool:
         widget = QWidget()
         widget.setMinimumHeight(height + 1)
         widget.setMaximumHeight(height + 1)
-        light_colour = adjust_color(colour, 30)
-        for item in items:
-            btn = QPushButton(item.item)
+
+        for i in items:
+            light_colour = adjust_color(i["colour"], 30)
+            btn = QPushButton(i["item"])
             btn.setMinimumHeight(height)
             btn.setMaximumHeight(height)
             btn.setMinimumWidth(self.attributes["width"])
@@ -710,7 +717,7 @@ class DigitalSketchMappingTool:
             btn.setCheckable(True)
             btn.setStyleSheet(f"""
                             QPushButton {{
-                                background-color: {colour};
+                                background-color: {i["colour"]};
                                 color: {self.attributes["colour"]};
                                 border-radius: 5px;
                                 padding: 2px 2px;
@@ -723,7 +730,7 @@ class DigitalSketchMappingTool:
                             }}
                             """)
             layout.addWidget(btn)
-            btn.clicked.connect(lambda checked, btn_name=item, clicked_btn=btn: self.button_clicked(btn_name, clicked_btn))
+            btn.clicked.connect(lambda checked, btn_name=i["item"], clicked_btn=btn: self.button_clicked(btn_name, clicked_btn))
             layout.setContentsMargins(1, 1, 1, 1)
             layout.setSpacing(2)
 

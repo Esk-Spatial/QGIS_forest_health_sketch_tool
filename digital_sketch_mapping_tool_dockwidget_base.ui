@@ -89,7 +89,7 @@
             </property>
             <property name="iconSize">
              <size>
-              <width>20</width>
+              <width>30</width>
               <height>30</height>
              </size>
             </property>
@@ -121,8 +121,8 @@
             </property>
             <property name="iconSize">
              <size>
-              <width>20</width>
-              <height>20</height>
+              <width>30</width>
+              <height>30</height>
              </size>
             </property>
            </widget>
@@ -262,7 +262,7 @@
            </spacer>
           </item>
           <item>
-           <widget class="QPushButton" name="savePushButton">
+           <widget class="QPushButton" name="saveAndPanPushButton">
             <property name="minimumSize">
              <size>
               <width>50</width>
@@ -276,14 +276,14 @@
              </size>
             </property>
             <property name="toolTip">
-             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:9pt;&quot;&gt;Save Layers&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:9pt;&quot;&gt;Save Layers and Pan&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
             </property>
             <property name="text">
              <string/>
             </property>
             <property name="icon">
              <iconset>
-              <normaloff>icons/buttons/floppy-disk-sharp-duotone-thin.svg</normaloff>icons/buttons/floppy-disk-sharp-duotone-thin.svg</iconset>
+              <normaloff>icons/buttons/save-and-pan.svg</normaloff>icons/buttons/save-and-pan.svg</iconset>
             </property>
             <property name="iconSize">
              <size>
@@ -294,17 +294,36 @@
            </widget>
           </item>
           <item>
-           <spacer name="horizontalSpacer_4">
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
+           <widget class="QPushButton" name="selectPushButton">
+            <property name="minimumSize">
              <size>
-              <width>40</width>
-              <height>20</height>
+              <width>50</width>
+              <height>50</height>
              </size>
             </property>
-           </spacer>
+            <property name="maximumSize">
+             <size>
+              <width>50</width>
+              <height>50</height>
+             </size>
+            </property>
+            <property name="toolTip">
+             <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:9pt;&quot;&gt;Select Feature&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="icon">
+             <iconset>
+              <normaloff>icons/buttons/hand-pointer-duotone-thin.svg</normaloff>icons/buttons/hand-pointer-duotone-thin.svg</iconset>
+            </property>
+            <property name="iconSize">
+             <size>
+              <width>30</width>
+              <height>30</height>
+             </size>
+            </property>
+           </widget>
           </item>
          </layout>
         </widget>

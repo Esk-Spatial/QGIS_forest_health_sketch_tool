@@ -48,19 +48,24 @@
        <number>2</number>
       </property>
       <property name="leftMargin">
-       <number>2</number>
+       <number>1</number>
       </property>
       <property name="topMargin">
-       <number>2</number>
+       <number>1</number>
       </property>
       <property name="rightMargin">
-       <number>2</number>
+       <number>1</number>
       </property>
       <property name="bottomMargin">
-       <number>2</number>
+       <number>1</number>
       </property>
       <item>
        <widget class="QFrame" name="frame_10">
+        <property name="font">
+         <font>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
         <property name="frameShape">
          <enum>QFrame::NoFrame</enum>
         </property>
@@ -83,6 +88,27 @@
          <property name="bottomMargin">
           <number>0</number>
          </property>
+         <item>
+          <widget class="QCheckBox" name="bingImageryCheckBox">
+           <property name="font">
+            <font>
+             <pointsize>13</pointsize>
+            </font>
+           </property>
+           <property name="text">
+            <string>Add Bing Imagery (requires internet connection)</string>
+           </property>
+           <property name="iconSize">
+            <size>
+             <width>20</width>
+             <height>20</height>
+            </size>
+           </property>
+           <property name="shortcut">
+            <string>Backspace</string>
+           </property>
+          </widget>
+         </item>
          <item>
           <spacer name="horizontalSpacer_5">
            <property name="orientation">
@@ -150,6 +176,29 @@
           <number>4</number>
          </property>
          <item>
+          <widget class="QLabel" name="label">
+           <property name="text">
+            <string>Project Name</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="projectNameLineEdit">
+           <property name="minimumSize">
+            <size>
+             <width>175</width>
+             <height>30</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>175</width>
+             <height>30</height>
+            </size>
+           </property>
+          </widget>
+         </item>
+         <item>
           <widget class="QgsFileWidget" name="folderQgsFileWidget">
            <property name="minimumSize">
             <size>
@@ -176,22 +225,6 @@
             <set>QFileDialog::ShowDirsOnly</set>
            </property>
           </widget>
-         </item>
-         <item>
-          <spacer name="horizontalSpacer_4">
-           <property name="orientation">
-            <enum>Qt::Horizontal</enum>
-           </property>
-           <property name="sizeType">
-            <enum>QSizePolicy::Maximum</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>75</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
          </item>
          <item>
           <widget class="QCheckBox" name="useExistingLayerCheckBox">
@@ -497,6 +530,18 @@
          <enum>QFrame::Raised</enum>
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout">
+         <property name="leftMargin">
+          <number>2</number>
+         </property>
+         <property name="topMargin">
+          <number>2</number>
+         </property>
+         <property name="rightMargin">
+          <number>2</number>
+         </property>
+         <property name="bottomMargin">
+          <number>2</number>
+         </property>
          <item>
           <widget class="QGroupBox" name="groupBox">
            <property name="font">
@@ -513,6 +558,9 @@
             <string>Dissplay Keypad(s)</string>
            </property>
            <layout class="QVBoxLayout" name="verticalLayout_7">
+            <property name="spacing">
+             <number>1</number>
+            </property>
             <property name="leftMargin">
              <number>2</number>
             </property>
@@ -584,6 +632,9 @@
                <enum>QFrame::Raised</enum>
               </property>
               <layout class="QHBoxLayout" name="horizontalLayout_3">
+               <property name="spacing">
+                <number>1</number>
+               </property>
                <property name="leftMargin">
                 <number>2</number>
                </property>
@@ -757,6 +808,9 @@
             <bool>false</bool>
            </property>
            <layout class="QVBoxLayout" name="verticalLayout_8">
+            <property name="spacing">
+             <number>1</number>
+            </property>
             <property name="leftMargin">
              <number>2</number>
             </property>
@@ -834,6 +888,9 @@
                <enum>QFrame::Raised</enum>
               </property>
               <layout class="QHBoxLayout" name="horizontalLayout_2">
+               <property name="spacing">
+                <number>1</number>
+               </property>
                <property name="leftMargin">
                 <number>2</number>
                </property>

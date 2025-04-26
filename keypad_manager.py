@@ -107,3 +107,6 @@ class KeypadManager:
     def clear_selection(self):
         for cat in self.data:
             self.set_category_selection(cat.category, 0)
+
+    def get_checked_category_items(self):
+        return self.db_handler.get_checked_category_items()
