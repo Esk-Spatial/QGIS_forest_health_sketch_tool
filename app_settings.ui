@@ -175,7 +175,7 @@
       <item>
        <widget class="QGroupBox" name="groupBox_4">
         <property name="title">
-         <string>Save To</string>
+         <string>Project Name and Location</string>
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_5">
          <property name="leftMargin">

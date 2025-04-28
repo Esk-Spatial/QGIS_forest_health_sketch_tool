@@ -171,5 +171,5 @@ def get_bing_layer(name):
         if (layer_tree.findLayer(l_id) and name == layer.name())
     }
 
-    QgsApplication.messageLog().logMessage(f'layer.name(): {layer} {not layer}', 'DigitalSketchPlugin')
+    QgsApplication.messageLog().logMessage(f'layer.name(): {layer} {not layer} {layer}', 'DigitalSketchPlugin')
     return layer
