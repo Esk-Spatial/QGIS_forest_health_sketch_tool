@@ -24,6 +24,21 @@
     <normaloff>icons/icon.png</normaloff>icons/icon.png</iconset>
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_6">
+   <property name="spacing">
+    <number>2</number>
+   </property>
+   <property name="leftMargin">
+    <number>6</number>
+   </property>
+   <property name="topMargin">
+    <number>6</number>
+   </property>
+   <property name="rightMargin">
+    <number>6</number>
+   </property>
+   <property name="bottomMargin">
+    <number>6</number>
+   </property>
    <item>
     <widget class="QFrame" name="frame_6">
      <property name="minimumSize">
@@ -92,7 +107,7 @@
           <widget class="QCheckBox" name="bingImageryCheckBox">
            <property name="font">
             <font>
-             <pointsize>13</pointsize>
+             <pointsize>10</pointsize>
             </font>
            </property>
            <property name="text">

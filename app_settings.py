@@ -312,5 +312,4 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.folderQgsFileWidget.setFilePath('')
         self.folderQgsFileWidget.setReadOnly(False)
         self.useExistingLayerCheckBox.setChecked(False)
-        self.keypad_manager.clear_selection()
-        self.clear_and_populate_categories()
+        self.bingImageryCheckBox.setChecked(False)

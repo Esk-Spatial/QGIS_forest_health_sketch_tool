@@ -37,7 +37,7 @@ from datetime import datetime
 
 from custom_zoom_tool import CustomZoomTool
 from helper import create_geopackage_file, split_array_to_chunks, adjust_color, show_delete_confirmation, \
-    get_existing_layers
+    get_existing_layers, get_bing_layer
 from qgis.core import (QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer,
                        QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis)
 
@@ -277,6 +277,7 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.zoomOutPushButton.clicked.connect(lambda: self.zoom_to_map(False))
 
         self.digital_sketch_widget.saveAndPanPushButton.clicked.connect(self.save_layers)
+        self.digital_sketch_widget.selectPushButton.clicked.connect(self.setup_feature_identify_tool)
         self.digital_sketch_widget.settingPushButton.clicked.connect(self.open_settings)
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
         self.digital_sketch_widget.deletePushButton.clicked.connect(self.remove_feature)
@@ -303,6 +304,7 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def remove_layers(self):
+        get_bing_layer(self.bing_layer_name)
         layers = get_existing_layers()
         for l_id in layers:
             QgsProject.instance().removeMapLayer(l_id)
@@ -312,7 +314,7 @@ class DigitalSketchMappingTool:
 
     def set_folder_location(self):
         folder = self.attributes['folder_path']
-        QgsApplication.messageLog().logMessage(f'Directory path {folder}.', 'DigitalSketchPlugin')
+        QgsApplication.messageLog().logMessage(f"Directory path {folder}. add_bing: {self.attributes['add_bing_imagery']}", "DigitalSketchPlugin")
         if folder:
             self.folder_location = folder
             if self.attributes['add_bing_imagery']:
