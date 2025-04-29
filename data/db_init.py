@@ -1,12 +1,6 @@
 import os
 import sqlite3
 
-# Step 1: Get the plugin directory dynamically
-data_dir = os.path.dirname(__file__)
-os.makedirs(data_dir, exist_ok=True)
-
-# Step 2: Create database in the data/ folder
-db_path = os.path.join(data_dir, 'keypad_data.sqlite')
 
 # Your category data
 data = [
@@ -24,41 +18,49 @@ data = [
     {"category": "GROUND", "selected": False, "colour": "#FFFFFF", "items": ["_Sirex", "_Drought", "_Root-H2O", "_Cyc", "_Essi", "_Herb", "_Etops", "_Yel-Tops"]}
 ]
 
-# Step 3: Create and populate database
-conn = sqlite3.connect(db_path)
-cur = conn.cursor()
+class DbInit:
+    def __init__(self, db_path):
+        self.db_path = db_path
+        data_dir = os.path.dirname(__file__)
+        os.makedirs(data_dir, exist_ok=True)
 
-cur.execute("DROP TABLE IF EXISTS categories")
-cur.execute("DROP TABLE IF EXISTS items")
 
-cur.execute("""
-    CREATE TABLE categories (
-        cat_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        category TEXT NOT NULL,
-        selected BOOLEAN NOT NULL,
-        colour TEXT NOT NULL
-    )
-""")
+    def init_db(self):
+        # Step 3: Create and populate database
+        conn = sqlite3.connect(self.db_path)
+        cur = conn.cursor()
 
-cur.execute("""
-    CREATE TABLE items (
-        item_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        category_id INTEGER NOT NULL,
-        item TEXT NOT NULL,
-        FOREIGN KEY(category_id) REFERENCES categories(id)
-    )
-""")
+        cur.execute("DROP TABLE IF EXISTS categories")
+        cur.execute("DROP TABLE IF EXISTS items")
 
-# Insert your data
-for entry in data:
-    cur.execute("INSERT INTO categories (category, selected, colour) VALUES (?, ?, ?)",
-                (entry["category"], int(entry["selected"]), entry["colour"]))
-    category_id = cur.lastrowid
-    for item in entry["items"]:
-        cur.execute("INSERT INTO items (category_id, item) VALUES (?, ?)",
-                    (category_id, item))
+        cur.execute("""
+            CREATE TABLE categories (
+                cat_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT NOT NULL,
+                selected BOOLEAN NOT NULL,
+                colour TEXT NOT NULL
+            )
+        """)
 
-conn.commit()
-conn.close()
+        cur.execute("""
+            CREATE TABLE items (
+                item_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category_id INTEGER NOT NULL,
+                item TEXT NOT NULL,
+                FOREIGN KEY(category_id) REFERENCES categories(id)
+            )
+        """)
 
-print(f"Database saved at: {db_path}")
+        # Insert your data
+        for entry in data:
+            cur.execute("INSERT INTO categories (category, selected, colour) VALUES (?, ?, ?)",
+                        (entry["category"], int(entry["selected"]), entry["colour"]))
+            category_id = cur.lastrowid
+            for item in entry["items"]:
+                cur.execute("INSERT INTO items (category_id, item) VALUES (?, ?)",
+                            (category_id, item))
+
+        conn.commit()
+        conn.close()
+
+        print(f"Database saved at: {self.db_path}")
