@@ -161,3 +161,15 @@ def get_existing_layers():
     }
 
     return enabled_layers
+
+def get_bing_layer(name):
+    existing_layers = QgsProject.instance().mapLayers()
+    layer_tree = QgsProject.instance().layerTreeRoot()
+    layer = {
+        "l_id": l_id
+        for l_id, layer in existing_layers.items()
+        if (layer_tree.findLayer(l_id) and name == layer.name())
+    }
+
+    QgsApplication.messageLog().logMessage(f'layer => {layer}', 'DigitalSketchPlugin')
+    return layer

@@ -27,9 +27,10 @@ def get_category_element(text):
 class AppSettingsDialog(QDialog, FORM_CLASS):
     def __init__(self, keypad_manager, attributes, parent=None):
         super(AppSettingsDialog, self).__init__(parent)
+        self.add_bing_imagery = False
         self.setupUi(self)
         self.keypad_manager = keypad_manager
-        keypad_manager.create_data_copy()
+        self.keypad_manager.load_data()
         self.categoryListWidget.itemSelectionChanged.connect(self.on_category_item_selected)
         self.elementListWidget.itemSelectionChanged.connect(self.on_element_item_selected)
         self.selected_category = ''
@@ -38,7 +39,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.colour = self.mColorButton.color().name(QColor.HexArgb)
         self.feature_colour = self.featureColorButton.color().name(QColor.HexArgb)
         self.font = self.mFontButton.currentFont()
-        self.height = 30
+        self.height = 26
         self.width = 150
         self.attributes = None
         self.use_existing_layer = False
@@ -48,6 +49,9 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
 
         if attributes is not None:
+            self.projectNameLineEdit.setText(attributes["project_name"])
+            if attributes["project_name"] is not None and attributes["project_name"] != '':
+                self.projectNameLineEdit.setReadOnly(True)
             self.folder_location = attributes["folder_path"]
             self.folderQgsFileWidget.setFilePath(attributes["folder_path"])
             self.change_folder_ctrl_to_readonly(attributes["folder_path"])
@@ -62,6 +66,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             self.project_changed = attributes['project_changed'] if attributes['project_changed'] is not None else False
             if attributes['project_changed']:
                 self.clear_selection()
+            self.bingImageryCheckBox.setChecked(attributes["add_bing_imagery"])
 
         self.updated_settings = False
         self.clear_and_populate_categories()
@@ -83,6 +88,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.mColorButton.colorChanged.connect(self.colour_changed)
         self.folderQgsFileWidget.fileChanged.connect(self.set_folder_location)
         self.useExistingLayerCheckBox.stateChanged.connect(lambda state: self.set_use_existing(state))
+        self.bingImageryCheckBox.stateChanged.connect(lambda state: self.set_add_bing_imagery(state))
 
     def move_category(self, direction):
         QgsApplication.messageLog().logMessage(f"move_category: {direction}", 'DigitalSketchPlugin')
@@ -115,19 +121,21 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
         add_element = AddOrEditElement()
         if add_element.exec_() == QDialog.Accepted:
-            data = add_element.get_element_text()
-            if data != "":
+            data = add_element.get_item()
+            if data.item != "":
                 self.keypad_manager.add_item(self.selected_category, data)
                 self.clear_populate_elements_list(self.selected_category)
 
     def apply_settings(self):
         QgsApplication.messageLog().logMessage("apply_settings", 'DigitalSketchPlugin')
         self.updated_settings = True
-        self.attributes = dict(folder_path=self.folder_location, use_existing=self.use_existing_layer,
-                               layers=self.layers, new_project=self.new_project, feature_colour=self.feature_colour,
-                               surveyor=self.surveyourLineEdit.text().strip(), type_txt=self.typeLineEdit.text().strip(),
-                               font=self.font, colour=self.colour, height=int(self.heightLineEdit.text().strip()),
-                               width=int(self.widthLineEdit.text().strip()), project_changed=self.project_changed)
+        self.attributes = dict(project_name=self.projectNameLineEdit.text().strip(), folder_path=self.folder_location,
+                               use_existing=self.use_existing_layer, layers=self.layers, new_project=self.new_project,
+                               feature_colour=self.feature_colour, surveyor=self.surveyourLineEdit.text().strip(),
+                               type_txt=self.typeLineEdit.text().strip(), font=self.font, colour=self.colour,
+                               height=int(self.heightLineEdit.text().strip()),
+                               width=int(self.widthLineEdit.text().strip()), project_changed=self.project_changed,
+                               add_bing_imagery=self.add_bing_imagery)
         self.keypad_manager.update_dataset()
         self.accept()
 
@@ -141,7 +149,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
     def clear_and_populate_categories(self):
         self.categoryListWidget.clear()
-        for pad in self.keypad_manager.data_cpy:
+        for pad in self.keypad_manager.data:
             item = QListWidgetItem(self.categoryListWidget)
             widget = QWidget()
             layout = QHBoxLayout()
@@ -193,17 +201,17 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
     def clear_populate_elements_list(self, category_name):
         self.elementListWidget.clear()
-        category = next((cat for cat in self.keypad_manager.data_cpy if cat.category == category_name), None)
+        category = next((cat for cat in self.keypad_manager.data if cat.category == category_name), None)
         if category:
             for element in category.items:
                 item = QListWidgetItem(self.elementListWidget)
                 widget = QWidget()
                 layout = QHBoxLayout()
-                label = QLabel(element)
+                label = QLabel(element.item)
                 label.setMinimumSize(50, 30)
 
                 space = QSpacerItem(40, 30, QSizePolicy.Expanding, QSizePolicy.Minimum)
-                obj_name = f'{category.category}:{element}'
+                obj_name = f'{category.category}:{element.item}'
 
                 # edit Button (QPushButton)
                 edit_button = QPushButton('Edit')
@@ -259,6 +267,10 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             layer_selection = SelectExistingLayerDialog()
             if layer_selection.exec_() == QDialog.Accepted:
                 self.layers = layer_selection.get_layer_selection()
+                self.set_project_name_and_file_read_only()
+
+    def set_add_bing_imagery(self, state):
+        self.add_bing_imagery = state == Qt.Checked
 
 
     def font_changed(self):
@@ -268,9 +280,14 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         if folder_location is not None and folder_location != '':
             self.folderQgsFileWidget.setReadOnly(True)
 
+    def set_project_name_and_file_read_only(self):
+        self.folderQgsFileWidget.setReadOnly(True)
+        self.projectNameLineEdit.setReadOnly(True)
+
     def delete_keypad_category(self, db):
         category = db.objectName()
         if show_delete_confirmation(f'Category: {category}') == QDialog.Accepted:
+            self.elementListWidget.clear()
             self.keypad_manager.remove_category(category)
             self.clear_and_populate_categories()
 
@@ -278,7 +295,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         cat_element = get_category_element(eb.objectName())
         edit_element = AddOrEditElement(cat_element[1])
         if edit_element.exec_() == QDialog.Accepted:
-            self.keypad_manager.update_item(cat_element[0], cat_element[1], edit_element.get_element_text())
+            self.keypad_manager.update_item(cat_element[0], cat_element[1], edit_element.get_item())
             self.clear_populate_elements_list(self.selected_category)
 
 
@@ -286,17 +303,19 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         cat_element = get_category_element(db.objectName())
         if show_delete_confirmation(f'Element: {cat_element[1]}') == QDialog.Accepted:
             self.keypad_manager.remove_item(cat_element[0], cat_element[1])
-            self.clear_populate_elements_list(self.selected_category)
+            self.clear_populate_elements_list(cat_element[0])
 
     def create_new_project(self):
         confirmation = ConfirmationDialog()
         if confirmation.exec_() == QDialog.Accepted:
             self.new_project = True
             self.clear_selection()
+            self.useExistingLayerCheckBox.setDisabled(True)
 
     def clear_selection(self):
+        self.projectNameLineEdit.setText('')
+        self.projectNameLineEdit.setReadOnly(False)
         self.folderQgsFileWidget.setFilePath('')
         self.folderQgsFileWidget.setReadOnly(False)
         self.useExistingLayerCheckBox.setChecked(False)
-        self.keypad_manager.clear_selection()
-        self.clear_and_populate_categories()
+        self.bingImageryCheckBox.setChecked(False)

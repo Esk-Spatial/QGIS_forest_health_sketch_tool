@@ -25,7 +25,7 @@ import traceback
 from collections import deque
 
 from PyQt5.QtWidgets import QRadioButton, QStackedWidget
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QVariant
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QVariant, QMargins
 from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWidgets import (QAction, QFileDialog, QMessageBox, QPushButton, QVBoxLayout, QFileDialog, QDialog,
                                  QWidget, QHBoxLayout, QSpacerItem, QSizePolicy, QGroupBox, QScrollArea, QToolButton,
@@ -37,10 +37,10 @@ from datetime import datetime
 
 from custom_zoom_tool import CustomZoomTool
 from helper import create_geopackage_file, split_array_to_chunks, adjust_color, show_delete_confirmation, \
-    get_existing_layers
+    get_existing_layers, get_bing_layer
 from qgis.core import (QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer,
                        QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis)
-
+from data.db_init import DbInit
 from stream_digitizing_tool import StreamDigitizingTool
 from multi_line_tool import MultiLineDigitizingTool
 from feature_identify_tool import FeatureIdentifyTool
@@ -53,6 +53,7 @@ from .resources import *
 # Import the code for the DockWidget
 from .digital_sketch_mapping_tool_dockwidget import DigitalSketchMappingToolDockWidget
 import os.path
+
 try:
     from osgeo import ogr
 except ImportError:
@@ -91,6 +92,9 @@ class DigitalSketchMappingTool:
             application at run time.
         :type iface: QgsInterface
         """
+        # initialize plugin directory
+        self.plugin_dir = os.path.dirname(__file__)
+
         # Save reference to the QGIS interface
         self.created_layers_stack = deque()
         self.digitizing_tool = None
@@ -117,9 +121,9 @@ class DigitalSketchMappingTool:
         self.multiline_tool = None
         self.polygon_tool = None
         self.point_tool = None
-        self.point_style = os.path.join(os.path.dirname(__file__), "styles", "geolink_points_240325.qml")
-        self.polygon_style = os.path.join(os.path.dirname(__file__), "styles", "geolink_polygons_240325.qml")
-        self.line_style = os.path.join(os.path.dirname(__file__), "styles", "geolink_lines_240325.qml")
+        self.point_style = os.path.join(self.plugin_dir, "styles", "geolink_points_240325.qml")
+        self.polygon_style = os.path.join(self.plugin_dir, "styles", "geolink_polygons_240325.qml")
+        self.line_style = os.path.join(self.plugin_dir, "styles", "geolink_lines_240325.qml")
         self.clicked_buttons = set()
         self.text_changed = False
         self.project_crs = None
@@ -128,14 +132,14 @@ class DigitalSketchMappingTool:
             "https://t0.tiles.virtualearth.net/tiles/a{q}.jpeg?g=685&mkt=en-us&n=z"
         )
         self.bing_layer_name = "Bing Satellite Imagery"
+        self.db_path = os.path.join(self.plugin_dir, "data", "keypad_data.sqlite")
+        self.db_initializer = DbInit(self.db_path)
 
         # Location coordinates (longitude, latitude)
         self.location_lon = 151.2093
         self.location_lat = -33.8688
         self.iface.newProjectCreated.connect(self.on_project_create_or_read)
         self.iface.projectRead.connect(self.on_project_create_or_read)
-        # initialize plugin directory
-        self.plugin_dir = os.path.dirname(__file__)
 
         # initialize locale
         locale = QSettings().value('locale/userLocale')[0:2]
@@ -256,7 +260,7 @@ class DigitalSketchMappingTool:
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
         settings = QSettings()
-
+        self.init_database_if_not_exists()
         attr_value = str(settings.value("qgis/digitizing/disable_enter_attribute_values_dialog", "false")).lower()
         QgsApplication.messageLog().logMessage(f'attr_value: {attr_value}.', "DigitalSketchPlugin")
         QgsApplication.messageLog().logMessage(f'settings: {settings.fileName()}.', "DigitalSketchPlugin")
@@ -276,7 +280,8 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.zoomInPushButton.clicked.connect(lambda: self.zoom_to_map(True))
         self.digital_sketch_widget.zoomOutPushButton.clicked.connect(lambda: self.zoom_to_map(False))
 
-        self.digital_sketch_widget.savePushButton.clicked.connect(self.save_layers)
+        self.digital_sketch_widget.saveAndPanPushButton.clicked.connect(self.save_and_pan)
+        self.digital_sketch_widget.selectPushButton.clicked.connect(self.setup_feature_identify_tool)
         self.digital_sketch_widget.settingPushButton.clicked.connect(self.open_settings)
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
         self.digital_sketch_widget.deletePushButton.clicked.connect(self.remove_feature)
@@ -293,6 +298,16 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
+    def init_database_if_not_exists(self):
+        if not os.path.exists(self.db_path):
+            db_init_path = os.path.join(self.plugin_dir, 'data', 'db_init.py')
+            if os.path.exists(db_init_path):
+                self.db_initializer.init_db()
+
+            else:
+                raise FileNotFoundError("data/db_init.py not found to initialize the database.")
+    # --------------------------------------------------------------------------
+
     def on_project_create_or_read(self):
         QgsApplication.messageLog().logMessage('project create/read', 'DigitalSketchPlugin')
         self.folder_location_set = False
@@ -303,6 +318,9 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def remove_layers(self):
+        bing_layer = get_bing_layer(self.bing_layer_name)
+        if bool(bing_layer):
+            QgsProject.instance().removeMapLayer(bing_layer.get("l_id"))
         layers = get_existing_layers()
         for l_id in layers:
             QgsProject.instance().removeMapLayer(l_id)
@@ -312,11 +330,12 @@ class DigitalSketchMappingTool:
 
     def set_folder_location(self):
         folder = self.attributes['folder_path']
-        QgsApplication.messageLog().logMessage(f'Directory path {folder}.', 'DigitalSketchPlugin')
+        QgsApplication.messageLog().logMessage(f"Directory path {folder}. add_bing: {self.attributes['add_bing_imagery']}", "DigitalSketchPlugin")
         if folder:
             self.folder_location = folder
-            self.load_bing_maps()
-            self.create_geopackage_file()
+            if self.attributes['add_bing_imagery']:
+                self.load_bing_maps()
+            self.create_geopackage_file(self.attributes['project_name'])
             self.zoom_to_location()
 
     # --------------------------------------------------------------------------
@@ -340,8 +359,8 @@ class DigitalSketchMappingTool:
             QgsApplication.messageLog().logMessage("Failed to load Bing Maps layer.", "DigitalSketchPlugin")
             return
 
-        QgsProject.instance().addMapLayer(bing_layer)
-        self.iface.setActiveLayer(bing_layer)
+        QgsProject.instance().addMapLayer(bing_layer, False)
+        QgsProject.instance().layerTreeRoot().addLayer(bing_layer)
 
     # --------------------------------------------------------------------------
 
@@ -371,7 +390,7 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def populate_categories(self):
-        categories = self.keypad_manager.get_selected_categories()
+        items = self.keypad_manager.get_checked_category_items()
         attr_box = self.digital_sketch_widget.categoryAttrVerticalLayout
         if not attr_box.isEmpty():
             QgsApplication.messageLog().logMessage('Need to remove', 'DigitalSketchPlugin')
@@ -384,17 +403,12 @@ class DigitalSketchMappingTool:
                 if widget is not None:
                     widget.deleteLater()
 
-        for cat in categories:
-            QgsApplication.messageLog().logMessage(f'colour: {cat.colour}', 'DigitalSketchPlugin')
-            if len(cat.items) > 2:
-                QgsApplication.messageLog().logMessage("items greater than 3", 'DigitalSketchPlugin')
-                chunks = split_array_to_chunks(cat.items)
-                for chunk in chunks:
-                    attr_box.addWidget(self.populate_buttons_from_list(chunk, cat.colour))
-
-            else:
-                attr_box.addWidget(self.populate_buttons_from_list(cat.items, cat.colour))
-
+        if len(items) > 2:
+            chunks = split_array_to_chunks(items)
+            for chunk in chunks:
+                attr_box.addWidget(self.populate_buttons_from_list(chunk))
+        else:
+            attr_box.addWidget(self.populate_buttons_from_list(items))
         attr_box.addStretch()
 
         # --------------------------------------------------------------------------
@@ -450,7 +464,18 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
+    def save_and_pan(self):
+        self.save_layers()
+        self.remove_digitizing_tool()
+        self.digital_sketch_widget.saveAndPanPushButton.setChecked(True)
+        self.check_for_current_selection('save-and-pan')
+
+    # --------------------------------------------------------------------------
+
     def save_layers(self):
+        self.change_gps_settings(False)
+        self.check_for_current_selection()
+
         QgsApplication.messageLog().logMessage("Save layers is called", 'DigitalSketchPlugin')
         if self.point_layer.isEditable():
             QgsApplication.messageLog().logMessage("Point layer is editable", 'DigitalSketchPlugin')
@@ -469,10 +494,6 @@ class DigitalSketchMappingTool:
             self.polygon_layer.commitChanges()  # Save the changes
             self.iface.messageBar().pushMessage("Success", "Changes committed successfully to polygon layer!",
                                                 level=Qgis.Success)
-
-        self.change_gps_settings(False)
-        self.remove_digitizing_tool()
-        self.check_for_current_selection()
 
     # --------------------------------------------------------------------------
 
@@ -514,6 +535,10 @@ class DigitalSketchMappingTool:
             elif self.use_existing != self.attributes['use_existing']:
                 self.set_layer_from_existing(self.attributes['layers'])
             self.populate_categories()
+
+            bing_layer = get_bing_layer(self.bing_layer_name)
+            if self.attributes['add_bing_imagery'] and not bool(bing_layer):
+                self.load_bing_maps()
 
     # --------------------------------------------------------------------------
 
@@ -620,7 +645,20 @@ class DigitalSketchMappingTool:
         self.highlight = None
         self.vertex_marker = None
         self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
+        self.iface.actionPan().trigger()
+
+    # --------------------------------------------------------------------------
+
+    def setup_feature_identify_tool(self):
+        self.save_layers()
+        self.check_for_current_selection('select')
+        self.digital_sketch_widget.selectPushButton.setChecked(True)
+        self.selected_attribute = None
+        self.highlight = None
+        self.vertex_marker = None
+        self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
         self.iface.mapCanvas().setMapTool(self.feature_identify_tool)
+
     # --------------------------------------------------------------------------
 
     def process_layer_after_adding(self, fid, layer, layer_type):
@@ -642,10 +680,10 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def create_geopackage_file(self):
+    def create_geopackage_file(self, project_name):
         QgsApplication.messageLog().logMessage('creating new gpkg file', 'DigitalSketchPlugin')
         date_time_str = datetime.now().strftime("%d-%m-%Y_%I-%M-%p")
-        gpkg_file_name = f"{date_time_str}.gpkg"
+        gpkg_file_name = f"{project_name}_{date_time_str}.gpkg"
         gpkg_file_name = os.path.join(self.folder_location, gpkg_file_name)
         QgsApplication.messageLog().logMessage(f'file name: {gpkg_file_name} file path: {gpkg_file_name}',
                                                'DigitalSketchPlugin')
@@ -656,9 +694,9 @@ class DigitalSketchMappingTool:
 
         create_geopackage_file(gpkg_file_name, self.project_crs)
 
-        self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-points", "sketch-points", "ogr")
-        self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-lines", "sketch-lines", "ogr")
-        self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-polygons", "sketch-polygons", "ogr")
+        self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-points", f"{project_name}-sketch-points", "ogr")
+        self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-lines", f"{project_name}-sketch-lines", "ogr")
+        self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-polygons", f"{project_name}-sketch-polygons", "ogr")
 
         QgsProject.instance().addMapLayer(self.point_layer)
         QgsProject.instance().addMapLayer(self.line_layer)
@@ -679,6 +717,10 @@ class DigitalSketchMappingTool:
                 self.digital_sketch_widget.pointPushButton.setChecked(False)
             elif self.pressed_btn == 'polygons':
                 self.digital_sketch_widget.polygonPushButton.setChecked(False)
+            elif self.pressed_btn == 'save-and-pan':
+                self.digital_sketch_widget.saveAndPanPushButton.setChecked(False)
+            elif self.pressed_btn == 'select':
+                self.digital_sketch_widget.selectPushButton.setChecked(False)
 
         if selection is not  None:
             self.pressed_btn = selection
@@ -688,27 +730,35 @@ class DigitalSketchMappingTool:
             self.digital_sketch_widget.linePushButton.setChecked(False)
             self.digital_sketch_widget.pointPushButton.setChecked(False)
             self.digital_sketch_widget.polygonPushButton.setChecked(False)
+            self.digital_sketch_widget.saveAndPanPushButton.setChecked(False)
+            self.digital_sketch_widget.selectPushButton.setChecked(False)
 
     # --------------------------------------------------------------------------
 
-    def populate_buttons_from_list(self, items, colour):
+    def populate_buttons_from_list(self, items):
+        margin = QMargins(1,1,1,1)
         layout = QHBoxLayout()
+        layout.setContentsMargins(margin)
+        height = self.attributes["height"]
         widget = QWidget()
-        light_colour = adjust_color(colour, 30)
-        for item in items:
-            btn = QPushButton(item)
-            btn.setMinimumHeight(self.attributes["height"])
-            btn.setMaximumHeight(self.attributes["height"])
+        widget.setMinimumHeight(height + 1)
+        widget.setMaximumHeight(height + 1)
+
+        for i in items:
+            light_colour = adjust_color(i["colour"], 30)
+            btn = QPushButton(i["item"])
+            btn.setMinimumHeight(height)
+            btn.setMaximumHeight(height)
             btn.setMinimumWidth(self.attributes["width"])
             btn.setMaximumWidth(self.attributes["width"])
             btn.setFont(self.attributes["font"])
             btn.setCheckable(True)
             btn.setStyleSheet(f"""
                             QPushButton {{
-                                background-color: {colour};
+                                background-color: {i["colour"]};
                                 color: {self.attributes["colour"]};
                                 border-radius: 5px;
-                                padding: 5px 5x;
+                                padding: 2px 2px;
                             }}
                             QPushButton:hover {{
                                 background-color: {light_colour};
@@ -718,9 +768,9 @@ class DigitalSketchMappingTool:
                             }}
                             """)
             layout.addWidget(btn)
-            btn.clicked.connect(lambda checked, btn_name=item, clicked_btn=btn: self.button_clicked(btn_name, clicked_btn))
-            layout.setContentsMargins(2, 2, 2, 2)
-            layout.setSpacing(5)
+            btn.clicked.connect(lambda checked, btn_name=i["item"], clicked_btn=btn: self.button_clicked(btn_name, clicked_btn))
+            layout.setContentsMargins(1, 1, 1, 1)
+            layout.setSpacing(2)
 
         layout.addItem(QSpacerItem(40, 30, QSizePolicy.Expanding, QSizePolicy.Minimum))
         layout.insertStretch(-1, 100)

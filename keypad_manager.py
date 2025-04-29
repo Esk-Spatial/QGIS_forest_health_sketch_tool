@@ -1,54 +1,46 @@
 import copy
 from PyQt5.QtCore import Qt
 
-_initial_data_ = [
-    {"category": "BMAD", "selected": False, "colour": "#FFC0CB", "items": ["Discolour", "BMAD_L", "BMAD_M", "BMAD_H", "Stags", "Other"]},
-    {"category": "EUCS", "selected": False, "colour": "#00FF00", "items": ["Creiis_", "Discolour_", "Defol_", "KLD_", "MLD_", "BMAD_", "QSB_", "WinterBB_"]},
-    {"category": "DEAD", "selected": False, "colour": "#FF9595", "items": ["D-tr_", "D-to_", "D-ti_", "D-tr-to-ti_"]},
-    {"category": "NEEDLES", "selected": False, "colour": "#FFFFA4", "items": ["Dothi_", "Essi_", "Yelo_", "Brown_"]},
-    {"category": "NUT-DEF", "selected": False, "colour": "#FFA4E1", "items": ["B-def_", "Mg-K-def_", "Nut-def_", "N-def"]},
-    {"category": "WEEDS", "selected": False, "colour": "#7AB47A", "items": ["Weeds_"]},
-    {"category": "POSSUM", "selected": False, "colour": "#FFA500", "items": ["Poss_"]},
-    {"category": "SPH", "selected": False, "colour": "#D3D3D3", "items": ["SPH_"]},
-    {"category": "INCIDENCE", "selected": False, "colour": "#FFFFe0", "items": ["1-5%", "5-15%", "15-30%", "30-45%", "45-75%", ">75%"]},
-    {"category": "CLIMATE", "selected": False, "colour": "#D5D5D5", "items": ["Frost_", "Fire_", "Snow_", "Wind_", "L_", "Hail_"]},
-    {"category": "SEVERITY", "selected": False, "colour": "#ADD8E6", "items": ["Low", "Moderate", "High", "Extreme"]},
-    {"category": "GROUND", "selected": False, "colour": "#FFFFFF", "items": ["_Sirex", "_Drought", "_Root-H2O", "_Cyc", "_Essi", "_Herb", "_Etops", "_Yel-Tops"]}
-]
+from data.db_handler import DbHandler
+from qgis.core import QgsApplication
 
 class Keypad:
-    def __init__(self, category: str, selected: bool, colour: str, items: list):
+    def __init__(self, cat_id: int, category: str, selected: bool, colour: str, items: list):
+        self.cat_id = cat_id
         self.category = category
         self.selected = selected
         self.colour = colour
-        self.items = items
+        self.items = [KeypadItem(**data) for data in items]
 
     def __repr__(self):
-        return f"Category(category='{self.category}', selected={self.selected}, colour='{self.colour}', items={self.items})"
+        return f"Category(cat_id={self.cat_id}, category='{self.category}', selected={self.selected}, colour='{self.colour}', items={self.items})"
+
+class KeypadItem:
+    def __init__(self, item_id, item):
+        self.item_id = item_id
+        self.item = item
+
+    def __repr__(self):
+        return f"Item(item_id={self.item_id}, item='{self.item}')"
 
 class KeypadManager:
 
     def __init__(self):
-        self.data = [Keypad(**data) for data in _initial_data_]
-        self.data_cpy = []
+        self.data = []
+        self.db_handler = DbHandler()
 
-    def create_data_copy(self):
-        self.data_cpy = copy.deepcopy(self.data)
+    def load_data(self):
+        self.data = [Keypad(**data) for data in self.db_handler.load_keypad_data()]
 
     def update_dataset(self):
-        global _initial_data_
-        _initial_data_ = [
-            {"category": keypad.category, "selected": keypad.selected, "colour": keypad.colour, "items": keypad.items}
-            for keypad in self.data_cpy
-        ]
-        self.data = [Keypad(**data) for data in _initial_data_]
+        self.db_handler.reset_and_update(self.data)
 
     def get_selected_categories(self):
         return filter(lambda category: category.selected == True, self.data)
 
     def add_category(self, data):
-        if any(cat.category != data.category for cat in self.data_cpy):
-            self.data_cpy.append(data)
+        if any(cat.category != data.category for cat in self.data):
+            self.data.append(data)
 
     def add_item(self, category_name, data):
         category = self.get_category_by_name(category_name)
@@ -57,14 +49,14 @@ class KeypadManager:
 
     def move_category(self, category_name, direction):
         """Moves a category up or down."""
-        index = next((i for i, cat in enumerate(self.data_cpy) if cat.category == category_name), None)
+        index = next((i for i, cat in enumerate(self.data) if cat.category == category_name), None)
         if index is None:
             print(f"Category '{category_name}' not found.")
             return
         if direction == "up" and index > 0:
-            self.data_cpy[index], self.data_cpy[index - 1] = self.data_cpy[index - 1], self.data_cpy[index]
-        elif direction == "down" and index < len(self.data_cpy) - 1:
-            self.data_cpy[index], self.data_cpy[index + 1] = self.data_cpy[index + 1], self.data_cpy[index]
+            self.data[index], self.data[index - 1] = self.data[index - 1], self.data[index]
+        elif direction == "down" and index < len(self.data) - 1:
+            self.data[index], self.data[index + 1] = self.data[index + 1], self.data[index]
 
     def move_item(self, category_name, item, direction):
         """Moves an item up or down within a category."""
@@ -84,13 +76,13 @@ class KeypadManager:
 
     def remove_category(self, category_name):
         """Removes a category."""
-        self.data_cpy = [cat for cat in self.data_cpy if cat.category != category_name]
+        self.data = [cat for cat in self.data if cat.category != category_name]
 
     def remove_item(self, category_name, item):
         """Removes an item from a category."""
         category = self.get_category_by_name(category_name)
         if category:
-            category.items = [i for i in category.items if i != item]
+            category.items = [i for i in category.items if i.item != item]
 
     def set_category_selection(self, category_name, state):
         category = self.get_category_by_name(category_name)
@@ -107,11 +99,14 @@ class KeypadManager:
         """update an item name from a category."""
         category = self.get_category_by_name(category_name)
         if category:
-            category.items = [new_name if i == old_name else i for i in category.items]
+            category.items = [new_name.item if i == old_name else i for i in category.items]
 
     def get_category_by_name(self, category_name):
-        return next((cat for cat in self.data_cpy if cat.category == category_name), None)
+        return next((cat for cat in self.data if cat.category == category_name), None)
 
     def clear_selection(self):
-        for cat in self.data_cpy:
+        for cat in self.data:
             self.set_category_selection(cat.category, 0)
+
+    def get_checked_category_items(self):
+        return self.db_handler.get_checked_category_items()

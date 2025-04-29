@@ -4,7 +4,7 @@ from qgis.PyQt import uic
 from qgis.core import QgsApplication
 import os
 
-from keypad_manager import Keypad
+from keypad_manager import Keypad, KeypadItem
 
 FORM_CLASS, _ = uic.loadUiType(os.path.join(os.path.dirname(__file__), "new_category.ui"))
 
@@ -24,12 +24,12 @@ class NewCategory(QDialog, FORM_CLASS):
         element_str = self.elementsTextEdit.toPlainText()
 
         if ',' in element_str:
-            elements = [e.strip() for e in element_str.split(',')]
+            elements = [{"item_id": 0, "item": e.strip()} for e in element_str.split(',')]
 
         else:
-            elements = [element_str]
+            elements = [{"item_id": 0, "item": element_str}]
 
-        category = Keypad(category, False, colour, elements)
+        category = Keypad(0, category, False, colour, elements)
         QgsApplication.messageLog().logMessage(f"category: {category}", 'DigitalSketchPlugin')
         self.result_data = category
         self.accept()
