@@ -41,12 +41,12 @@ class FeatureIdentifyTool(QgsMapTool):
             self.tool.vertex_marker.setCenter(point_geom)
             self.tool.vertex_marker.setIconType(QgsVertexMarker.ICON_CIRCLE)
             self.tool.vertex_marker.setIconSize(12)
-            self.tool.vertex_marker.setColor(QColor(255, 0, 0, 100)) # Red with 100 alpha (semi-transparent)
+            self.tool.vertex_marker.setColor(QColor(255, 38, 179, 255))
             self.tool.vertex_marker.setPenWidth(3)
 
         elif "polygons" in layer.name() or "lines" in layer.name():
             self.tool.highlight = QgsHighlight(self.canvas, feature.geometry(), layer)
-            self.tool.highlight.setColor(QColor(255, 0, 0, 100))  # Red with 100 alpha (semi-transparent)
+            self.tool.highlight.setColor(QColor(255, 38, 179, 255))
             self.tool.highlight.setWidth(3)
             self.tool.highlight.setWidth(3)
             self.tool.highlight.setFillColor(QColor(255, 0, 0, 50))  # Lighter red fill

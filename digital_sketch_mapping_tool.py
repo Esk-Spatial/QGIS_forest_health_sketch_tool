@@ -280,7 +280,7 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.zoomInPushButton.clicked.connect(lambda: self.zoom_to_map(True))
         self.digital_sketch_widget.zoomOutPushButton.clicked.connect(lambda: self.zoom_to_map(False))
 
-        self.digital_sketch_widget.saveAndPanPushButton.clicked.connect(self.save_layers)
+        self.digital_sketch_widget.saveAndPanPushButton.clicked.connect(self.save_and_pan)
         self.digital_sketch_widget.selectPushButton.clicked.connect(self.setup_feature_identify_tool)
         self.digital_sketch_widget.settingPushButton.clicked.connect(self.open_settings)
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
@@ -464,7 +464,18 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
+    def save_and_pan(self):
+        self.save_layers()
+        self.remove_digitizing_tool()
+        self.digital_sketch_widget.saveAndPanPushButton.setChecked(True)
+        self.check_for_current_selection('save-and-pan')
+
+    # --------------------------------------------------------------------------
+
     def save_layers(self):
+        self.change_gps_settings(False)
+        self.check_for_current_selection()
+
         QgsApplication.messageLog().logMessage("Save layers is called", 'DigitalSketchPlugin')
         if self.point_layer.isEditable():
             QgsApplication.messageLog().logMessage("Point layer is editable", 'DigitalSketchPlugin')
@@ -483,10 +494,6 @@ class DigitalSketchMappingTool:
             self.polygon_layer.commitChanges()  # Save the changes
             self.iface.messageBar().pushMessage("Success", "Changes committed successfully to polygon layer!",
                                                 level=Qgis.Success)
-
-        self.change_gps_settings(False)
-        self.remove_digitizing_tool()
-        self.check_for_current_selection()
 
     # --------------------------------------------------------------------------
 
@@ -643,6 +650,9 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def setup_feature_identify_tool(self):
+        self.save_layers()
+        self.check_for_current_selection('select')
+        self.digital_sketch_widget.selectPushButton.setChecked(True)
         self.selected_attribute = None
         self.highlight = None
         self.vertex_marker = None
@@ -707,6 +717,10 @@ class DigitalSketchMappingTool:
                 self.digital_sketch_widget.pointPushButton.setChecked(False)
             elif self.pressed_btn == 'polygons':
                 self.digital_sketch_widget.polygonPushButton.setChecked(False)
+            elif self.pressed_btn == 'save-and-pan':
+                self.digital_sketch_widget.saveAndPanPushButton.setChecked(False)
+            elif self.pressed_btn == 'select':
+                self.digital_sketch_widget.selectPushButton.setChecked(False)
 
         if selection is not  None:
             self.pressed_btn = selection
@@ -716,6 +730,8 @@ class DigitalSketchMappingTool:
             self.digital_sketch_widget.linePushButton.setChecked(False)
             self.digital_sketch_widget.pointPushButton.setChecked(False)
             self.digital_sketch_widget.polygonPushButton.setChecked(False)
+            self.digital_sketch_widget.saveAndPanPushButton.setChecked(False)
+            self.digital_sketch_widget.selectPushButton.setChecked(False)
 
     # --------------------------------------------------------------------------
 

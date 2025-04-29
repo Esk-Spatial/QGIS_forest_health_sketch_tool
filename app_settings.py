@@ -267,6 +267,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             layer_selection = SelectExistingLayerDialog()
             if layer_selection.exec_() == QDialog.Accepted:
                 self.layers = layer_selection.get_layer_selection()
+                self.set_project_name_and_file_read_only()
 
     def set_add_bing_imagery(self, state):
         self.add_bing_imagery = state == Qt.Checked
@@ -278,6 +279,10 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
     def change_folder_ctrl_to_readonly(self, folder_location):
         if folder_location is not None and folder_location != '':
             self.folderQgsFileWidget.setReadOnly(True)
+
+    def set_project_name_and_file_read_only(self):
+        self.folderQgsFileWidget.setReadOnly(True)
+        self.projectNameLineEdit.setReadOnly(True)
 
     def delete_keypad_category(self, db):
         category = db.objectName()
@@ -305,6 +310,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         if confirmation.exec_() == QDialog.Accepted:
             self.new_project = True
             self.clear_selection()
+            self.useExistingLayerCheckBox.setDisabled(True)
 
     def clear_selection(self):
         self.projectNameLineEdit.setText('')
