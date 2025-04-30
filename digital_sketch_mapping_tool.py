@@ -81,6 +81,20 @@ def apply_symbology(layer, iface):
     layer.triggerRepaint()
     iface.mapCanvas().refresh()
 
+
+def delete_keypad_items(attr_box)    :
+    if not attr_box.isEmpty():
+        QgsApplication.messageLog().logMessage('Need to remove', 'DigitalSketchPlugin')
+        count = attr_box.count()
+        if count > 0 and attr_box.itemAt(count - 1).spacerItem() is not None:
+            attr_box.takeAt(count - 1)  # Remove the existing spacer
+        while attr_box.count():
+            item = attr_box.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+
 class DigitalSketchMappingTool:
     """QGIS Plugin Implementation."""
 
@@ -296,6 +310,8 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.polygonPushButton.clicked.connect(
             lambda: self.setup_digitizing(self.polygon_layer, 'polygons'))
 
+        QgsProject.instance().layerRemoved.connect(lambda layer_id: self.layer_removed(layer_id))
+
     # --------------------------------------------------------------------------
 
     def init_database_if_not_exists(self):
@@ -342,9 +358,9 @@ class DigitalSketchMappingTool:
 
     def set_layer_from_existing(self, layers):
         self.use_existing =True
-        self.point_layer = layers['points']
-        self.polygon_layer = layers['polygons']
-        self.line_layer = layers['lines']
+        self.point_layer = layers['points'] if "points" in layers else None
+        self.polygon_layer = layers['polygons'] if "polygons" in layers else None
+        self.line_layer = layers['lines'] if "lines" in layers else None
 
         self.set_style_and_digitizing_tool()
 
@@ -392,16 +408,7 @@ class DigitalSketchMappingTool:
     def populate_categories(self):
         items = self.keypad_manager.get_checked_category_items()
         attr_box = self.digital_sketch_widget.categoryAttrVerticalLayout
-        if not attr_box.isEmpty():
-            QgsApplication.messageLog().logMessage('Need to remove', 'DigitalSketchPlugin')
-            count = attr_box.count()
-            if count > 0 and attr_box.itemAt(count - 1).spacerItem() is not None:
-                attr_box.takeAt(count - 1)  # Remove the existing spacer
-            while attr_box.count():
-                item = attr_box.takeAt(0)
-                widget = item.widget()
-                if widget is not None:
-                    widget.deleteLater()
+        delete_keypad_items(attr_box)
 
         if len(items) > 2:
             chunks = split_array_to_chunks(items)
@@ -411,7 +418,7 @@ class DigitalSketchMappingTool:
             attr_box.addWidget(self.populate_buttons_from_list(items))
         attr_box.addStretch()
 
-        # --------------------------------------------------------------------------
+    # --------------------------------------------------------------------------
 
     def button_clicked(self, button_name, btn):
         if self.text_changed:
@@ -497,6 +504,42 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
+    def layer_removed(self, layer_id):
+        if 'sketch_' in layer_id:
+            attr_box = self.digital_sketch_widget.categoryAttrVerticalLayout
+            delete_keypad_items(attr_box)
+            self.show_error_message('Sketch layer removed')
+
+            if 'sketch_lines' in layer_id:
+                self.line_layer = None
+            elif 'sketch_polygons' in layer_id:
+                self.polygon_layer = None
+            elif 'sketch_points' in layer_id:
+                self.point_layer = None
+    # --------------------------------------------------------------------------
+
+    def show_error_message(self, message):
+        msg = self.iface.messageBar().createMessage(f"Error: {message}")
+        btn = QPushButton("Please define your sketch layers or create new ones")
+        btn.clicked.connect(lambda: self.redefine_layers(msg))
+        btn.setMinimumHeight(30)
+        font = btn.font()
+        font.setPointSize(11)
+        btn.setFont(font)
+
+        msg.layout().addWidget(btn)
+        self.iface.messageBar().pushWidget(msg, level=Qgis.Critical, duration=0)
+
+    # --------------------------------------------------------------------------
+
+    def redefine_layers(self, message):
+        message.dismiss()
+        if self.attributes is not None:
+            self.attributes["use_existing"] = False
+        self.open_settings()
+
+    # --------------------------------------------------------------------------
+
     def change_gps_settings(self, start_digitizing):
         gps = self.iface.mainWindow().findChild(QWidget, 'QgsGpsInformationWidgetBase')
         popup_btn = gps.findChild(QToolButton, "mBtnPopupOptions")
@@ -534,7 +577,12 @@ class DigitalSketchMappingTool:
                 self.set_folder_location()
             elif self.use_existing != self.attributes['use_existing']:
                 self.set_layer_from_existing(self.attributes['layers'])
-            self.populate_categories()
+
+            if self.point_layer is not None and self.line_layer is not None and self.polygon_layer is not None:
+                self.populate_categories()
+
+            else:
+                self.show_error_message('All sketch layers are not defined')
 
             bing_layer = get_bing_layer(self.bing_layer_name)
             if self.attributes['add_bing_imagery'] and not bool(bing_layer):
@@ -580,43 +628,48 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def remove_feature(self):
-        if self.selected_attribute is not None:
-            QgsApplication.messageLog().logMessage(f"{self.selected_attribute}", 'DigitalSketchPlugin')
-            layer_type = self.selected_attribute["type"]
-            layer_fid = self.selected_attribute["fid"]
-            layer_code = self.selected_attribute["code"]
-            if show_delete_confirmation(f'selected feature?\n(Layer: {layer_type} Code: {layer_code})') == QDialog.Accepted:
-                if {"type": layer_type, "fid": layer_fid, "code": layer_code} in self.created_layers_stack:
-                    self.created_layers_stack.remove({"type": layer_type, "fid": layer_fid, "code": layer_code})
-            else:
-                self.selected_attribute = None
-                self.feature_identify_tool.remove_highlight()
-                return
+        if self.digitizing_tool is not None:
+            QgsApplication.messageLog().logMessage("still digitizing", 'DigitalSketchPlugin')
+            self.digitizing_tool.remove_feature()
 
         else:
-            if len(self.created_layers_stack) == 0:
-                return
+            if self.selected_attribute is not None:
+                QgsApplication.messageLog().logMessage(f"{self.selected_attribute}", 'DigitalSketchPlugin')
+                layer_type = self.selected_attribute["type"]
+                layer_fid = self.selected_attribute["fid"]
+                layer_code = self.selected_attribute["code"]
+                if show_delete_confirmation(f'selected feature?\n(Layer: {layer_type} Code: {layer_code})') == QDialog.Accepted:
+                    if {"type": layer_type, "fid": layer_fid, "code": layer_code} in self.created_layers_stack:
+                        self.created_layers_stack.remove({"type": layer_type, "fid": layer_fid, "code": layer_code})
+                else:
+                    self.selected_attribute = None
+                    self.feature_identify_tool.remove_highlight()
+                    return
 
-            QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
-            last_index = len(self.created_layers_stack)-1
-            last_layer = self.created_layers_stack[last_index]
-            layer_type = last_layer["type"]
-            layer_fid = last_layer["fid"]
-            layer_code = last_layer["code"]
-            if show_delete_confirmation(f'most recent feature?\n(Layer: {layer_type} Code: {layer_code})') == QDialog.Accepted:
-                self.created_layers_stack.pop()
-                QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
             else:
-                return
+                if len(self.created_layers_stack) == 0:
+                    return
 
-        if "lines" in layer_type:
-            self.delete_feature(self.line_layer, layer_fid)
+                QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
+                last_index = len(self.created_layers_stack)-1
+                last_layer = self.created_layers_stack[last_index]
+                layer_type = last_layer["type"]
+                layer_fid = last_layer["fid"]
+                layer_code = last_layer["code"]
+                if show_delete_confirmation(f'most recent feature?\n(Layer: {layer_type} Code: {layer_code})') == QDialog.Accepted:
+                    self.created_layers_stack.pop()
+                    QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
+                else:
+                    return
 
-        elif "points" in layer_type:
-            self.delete_feature(self.point_layer, layer_fid)
+            if "lines" in layer_type:
+                self.delete_feature(self.line_layer, layer_fid)
 
-        elif "polygons" in layer_type:
-            self.delete_feature(self.polygon_layer, layer_fid)
+            elif "points" in layer_type:
+                self.delete_feature(self.point_layer, layer_fid)
+
+            elif "polygons" in layer_type:
+                self.delete_feature(self.polygon_layer, layer_fid)
 
     # --------------------------------------------------------------------------
 
@@ -698,9 +751,9 @@ class DigitalSketchMappingTool:
         self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-lines", f"{project_name}-sketch-lines", "ogr")
         self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-polygons", f"{project_name}-sketch-polygons", "ogr")
 
-        QgsProject.instance().addMapLayer(self.point_layer)
-        QgsProject.instance().addMapLayer(self.line_layer)
         QgsProject.instance().addMapLayer(self.polygon_layer)
+        QgsProject.instance().addMapLayer(self.line_layer)
+        QgsProject.instance().addMapLayer(self.point_layer)
 
         self.set_style_and_digitizing_tool()
 

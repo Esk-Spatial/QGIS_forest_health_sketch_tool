@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>732</width>
-    <height>603</height>
+    <width>736</width>
+    <height>680</height>
    </rect>
   </property>
   <property name="minimumSize">
@@ -314,6 +314,11 @@
                 <width>16777215</width>
                 <height>30</height>
                </size>
+              </property>
+              <property name="styleSheet">
+               <string notr="true">QLineEdit#projectNameLineEdit:read-only {
+	background-color: rgb(240,240,240);
+}</string>
               </property>
               <property name="readOnly">
                <bool>false</bool>
@@ -737,7 +742,7 @@
             <bool>true</bool>
            </property>
            <property name="title">
-            <string>Dissplay Keypad(s)</string>
+            <string>Display Keypad(s)</string>
            </property>
            <layout class="QVBoxLayout" name="verticalLayout_7">
             <property name="spacing">
