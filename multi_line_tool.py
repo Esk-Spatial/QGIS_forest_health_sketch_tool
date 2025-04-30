@@ -84,3 +84,7 @@ class MultiLineDigitizingTool(QgsMapTool):
             multi_line.addGeometry(QgsLineString(line))
 
         return multi_line
+
+    def remove_feature(self):
+        self.multi_line_segments = []
+        self.rubber_band.reset(QgsWkbTypes.LineGeometry)

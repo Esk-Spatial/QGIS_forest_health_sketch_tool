@@ -18,6 +18,8 @@ def add_items_to_combo_box(items, combo_box):
 
 def get_selection_layer(items, combo_box):
     QgsApplication.messageLog().logMessage(f"{combo_box.currentIndex()}", 'DigitalSketchPlugin')
+    if len(items) == 0:
+        return None
     if len(items) == 1:
         return items[0]['layer']
     else:

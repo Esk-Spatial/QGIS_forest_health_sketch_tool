@@ -51,6 +51,9 @@ class StreamDigitizingTool(QgsMapTool):
         if not self.stream_points:
             return
         self.digitizing = False
+        # self.temp_rubber_band.setToGeometry(geom, None)
+
+    def populate_feature_for_polygon(self):
         geom = QgsGeometry.fromPolygonXY([self.stream_points])
 
         canvas_crs = QgsProject.instance().crs()
@@ -62,7 +65,6 @@ class StreamDigitizingTool(QgsMapTool):
         feature = QgsFeature(self.layer.fields())
         feature.setGeometry(geom)
         self.pending_features.append(feature)
-        # self.temp_rubber_band.setToGeometry(geom, None)
 
     def add_point(self, event):
         point = self.toMapCoordinates(event.pos())
@@ -80,6 +82,8 @@ class StreamDigitizingTool(QgsMapTool):
         self.pending_features.append(feature)
 
     def save_feature(self, attributes):
+        if self.layer_type != 'points':
+            self.populate_feature_for_polygon()
         if not self.pending_features:
             return
         if not self.layer.isEditable():
@@ -94,3 +98,14 @@ class StreamDigitizingTool(QgsMapTool):
         self.layer.commitChanges()
 
         self.rubber_band.reset(QgsWkbTypes.PolygonGeometry if self.layer_type == 'polygons' else QgsWkbTypes.PointGeometry)
+
+    def remove_feature(self):
+        QgsApplication.messageLog().logMessage(f'layer_type: {self.layer_type}', 'DigitalSketchPlugin')
+        if self.layer_type == 'points':
+            if len(self.pending_features) > 0:
+                self.pending_features.pop()
+                self.rubber_band.removeLastPoint()
+                self.rubber_band.show()
+        else:
+            self.stream_points = []
+            self.rubber_band.reset(QgsWkbTypes.PolygonGeometry)

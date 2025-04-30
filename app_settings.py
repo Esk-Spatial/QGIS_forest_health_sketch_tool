@@ -165,17 +165,22 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             # Delete Button (QPushButton)
             delete_button = QPushButton('X')
             delete_button.setObjectName(pad.category)
+            delete_button.setMinimumSize(30, 30)
             delete_button.setMaximumSize(30, 30)
             delete_button.setStyleSheet("background-color: red; color: white; border-radius: 5px;")
             delete_button.clicked.connect(lambda state, db=delete_button: self.delete_keypad_category(db))
 
-            c_box = QCheckBox(pad.category)
+            label = QLabel(pad.category)
+
+            c_box = QCheckBox("")
             c_box.setObjectName(pad.category)
             select_state = 2 if pad.selected == True else 0
             c_box.setCheckState(select_state)
             c_box.stateChanged.connect(lambda state, cb=c_box: self.checkbox_state_changed(cb, state))
 
             layout.addWidget(c_box)
+            layout.addWidget(label)
+            layout.addItem(QSpacerItem(30, 30, QSizePolicy.Expanding, QSizePolicy.Minimum))
             layout.addWidget(colour_picker)
             layout.addWidget(delete_button)
             layout.setContentsMargins(2, 2, 2, 2)
@@ -194,10 +199,10 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             if widget:
                 c_box = widget.findChild(QCheckBox)  # Find the checkbox inside the widget
                 if c_box:
-                    self.selected_category = c_box.text()
-                    QgsApplication.messageLog().logMessage(f"Selected Item: {c_box.text()}, Checked: {c_box.isChecked()}", 'DigitalSketchPlugin')
-                    self.padItemsGroupBox.setTitle(f'Keypad: {c_box.text()}')
-                    self.clear_populate_elements_list(c_box.text())
+                    self.selected_category = c_box.objectName()
+                    QgsApplication.messageLog().logMessage(f"Selected Item: {self.selected_category}, Checked: {c_box.isChecked()}", 'DigitalSketchPlugin')
+                    self.padItemsGroupBox.setTitle(f'Keypad: {self.selected_category}')
+                    self.clear_populate_elements_list(self.selected_category)
 
     def clear_populate_elements_list(self, category_name):
         self.elementListWidget.clear()
@@ -267,7 +272,9 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             layer_selection = SelectExistingLayerDialog()
             if layer_selection.exec_() == QDialog.Accepted:
                 self.layers = layer_selection.get_layer_selection()
-                self.set_project_name_and_file_read_only()
+                self.toggle_project_name_and_file_read_only_state(True)
+        else:
+            self.toggle_project_name_and_file_read_only_state(False)
 
     def set_add_bing_imagery(self, state):
         self.add_bing_imagery = state == Qt.Checked
@@ -280,9 +287,9 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         if folder_location is not None and folder_location != '':
             self.folderQgsFileWidget.setReadOnly(True)
 
-    def set_project_name_and_file_read_only(self):
-        self.folderQgsFileWidget.setReadOnly(True)
-        self.projectNameLineEdit.setReadOnly(True)
+    def toggle_project_name_and_file_read_only_state(self, state):
+        self.folderQgsFileWidget.setReadOnly(state)
+        self.projectNameLineEdit.setReadOnly(state)
 
     def delete_keypad_category(self, db):
         category = db.objectName()
