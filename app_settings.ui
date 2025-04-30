@@ -137,38 +137,6 @@
            </property>
           </spacer>
          </item>
-         <item>
-          <widget class="QPushButton" name="newProjectPushButton">
-           <property name="minimumSize">
-            <size>
-             <width>40</width>
-             <height>40</height>
-            </size>
-           </property>
-           <property name="maximumSize">
-            <size>
-             <width>40</width>
-             <height>40</height>
-            </size>
-           </property>
-           <property name="toolTip">
-            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:9pt;&quot;&gt;New Project&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-           </property>
-           <property name="text">
-            <string/>
-           </property>
-           <property name="icon">
-            <iconset>
-             <normaloff>icons/buttons/file-duotone-thin.svg</normaloff>icons/buttons/file-duotone-thin.svg</iconset>
-           </property>
-           <property name="iconSize">
-            <size>
-             <width>35</width>
-             <height>30</height>
-            </size>
-           </property>
-          </widget>
-         </item>
         </layout>
        </widget>
       </item>
@@ -176,6 +144,11 @@
        <widget class="QGroupBox" name="groupBox_4">
         <property name="autoFillBackground">
          <bool>false</bool>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">QGroupBox#groupBox_4 {
+	background-color: rgb(226, 226, 231)
+}</string>
         </property>
         <property name="title">
          <string>Project Name and Location</string>
@@ -241,6 +214,38 @@
                <size>
                 <width>20</width>
                 <height>20</height>
+               </size>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <widget class="QPushButton" name="newProjectPushButton">
+              <property name="minimumSize">
+               <size>
+                <width>40</width>
+                <height>40</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>40</width>
+                <height>40</height>
+               </size>
+              </property>
+              <property name="toolTip">
+               <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:9pt;&quot;&gt;New Project&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+              </property>
+              <property name="text">
+               <string/>
+              </property>
+              <property name="icon">
+               <iconset>
+                <normaloff>icons/buttons/file-duotone-thin.svg</normaloff>icons/buttons/file-duotone-thin.svg</iconset>
+              </property>
+              <property name="iconSize">
+               <size>
+                <width>35</width>
+                <height>30</height>
                </size>
               </property>
              </widget>
@@ -701,7 +706,7 @@
             </size>
            </property>
            <property name="text">
-            <string>150</string>
+            <string>174</string>
            </property>
           </widget>
          </item>
