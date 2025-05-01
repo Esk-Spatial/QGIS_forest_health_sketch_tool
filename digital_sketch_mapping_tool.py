@@ -148,6 +148,7 @@ class DigitalSketchMappingTool:
         self.bing_layer_name = "Bing Satellite Imagery"
         self.db_path = os.path.join(self.plugin_dir, "data", "keypad_data.sqlite")
         self.db_initializer = DbInit(self.db_path)
+        self.new_project_removing_existing = False
 
         # Location coordinates (longitude, latitude)
         self.location_lon = 151.2093
@@ -310,7 +311,7 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.polygonPushButton.clicked.connect(
             lambda: self.setup_digitizing(self.polygon_layer, 'polygons'))
 
-        QgsProject.instance().layerRemoved.connect(lambda layer_id: self.layer_removed(layer_id))
+        QgsProject.instance().layerRemoved.connect(self.layer_removed)
 
     # --------------------------------------------------------------------------
 
@@ -334,12 +335,22 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def remove_layers(self):
-        bing_layer = get_bing_layer(self.bing_layer_name)
-        if bool(bing_layer):
-            QgsProject.instance().removeMapLayer(bing_layer.get("l_id"))
-        layers = get_existing_layers()
-        for l_id in layers:
-            QgsProject.instance().removeMapLayer(l_id)
+        try:
+            QgsProject.instance().layerRemoved.disconnect(self.layer_removed)
+        except Exception as e:
+            QgsApplication.messageLog().logMessage(f"error byuub: {e}", "DigitalSketchPlugin")
+
+        try:
+            bing_layer = get_bing_layer(self.bing_layer_name)
+            if bool(bing_layer):
+                QgsProject.instance().removeMapLayer(bing_layer.get("l_id"))
+            layers = get_existing_layers()
+            if len(layers) > 0:
+                for l_id in layers:
+                    QgsProject.instance().removeMapLayer(l_id)
+
+        finally:
+            QgsProject.instance().layerRemoved.connect(self.layer_removed)
 
 
     # --------------------------------------------------------------------------
@@ -694,10 +705,7 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def remove_digitizing_tool(self):
-        self.selected_attribute = None
-        self.highlight = None
-        self.vertex_marker = None
-        self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
+        self.reset_selection_digitize_tool()
         self.iface.actionPan().trigger()
 
     # --------------------------------------------------------------------------
@@ -706,11 +714,18 @@ class DigitalSketchMappingTool:
         self.save_layers()
         self.check_for_current_selection('select')
         self.digital_sketch_widget.selectPushButton.setChecked(True)
+        self.reset_selection_digitize_tool()
+        self.iface.mapCanvas().setMapTool(self.feature_identify_tool)
+
+    # --------------------------------------------------------------------------
+
+    def reset_selection_digitize_tool(self):
         self.selected_attribute = None
         self.highlight = None
         self.vertex_marker = None
-        self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
-        self.iface.mapCanvas().setMapTool(self.feature_identify_tool)
+        if self.digitizing_tool is not None:
+            self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
+            self.digitizing_tool = None
 
     # --------------------------------------------------------------------------
 
