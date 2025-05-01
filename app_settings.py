@@ -40,7 +40,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.feature_colour = self.featureColorButton.color().name(QColor.HexArgb)
         self.font = self.mFontButton.currentFont()
         self.height = 26
-        self.width = 150
+        self.width = 174
         self.attributes = None
         self.use_existing_layer = False
         self.layers = None
@@ -63,6 +63,8 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             self.heightLineEdit.setText(f'{attributes["height"]}')
             self.widthLineEdit.setText(f'{attributes["width"]}')
             self.useExistingLayerCheckBox.setChecked(attributes["use_existing"])
+            if attributes["use_existing"]:
+                self.toggle_project_name_and_file_read_only_state(True)
             self.project_changed = attributes['project_changed'] if attributes['project_changed'] is not None else False
             if attributes['project_changed']:
                 self.clear_selection()
