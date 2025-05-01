@@ -14,7 +14,7 @@ except ImportError:
     import osr
 
 from qgis.PyQt.QtGui import QColor
-from qgis.core import QgsCoordinateTransform, QgsProject, QgsApplication
+from qgis.core import QgsCoordinateTransform, QgsProject, QgsApplication, QgsLayerTreeGroup, QgsLayerTreeLayer
 
 def create_geopackage_file(path, crs=None):
 
@@ -171,5 +171,4 @@ def get_bing_layer(name):
         if (layer_tree.findLayer(l_id) and name == layer.name())
     }
 
-    QgsApplication.messageLog().logMessage(f'layer => {layer}', 'DigitalSketchPlugin')
     return layer

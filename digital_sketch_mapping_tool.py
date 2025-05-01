@@ -32,14 +32,14 @@ from qgis.PyQt.QtWidgets import (QAction, QFileDialog, QMessageBox, QPushButton,
                                  QWidgetAction)
 from qgis.core import (QgsApplication, QgsFields, QgsCoordinateReferenceSystem, QgsVectorFileWriter, QgsWkbTypes,
                        QgsVectorLayer, QgsProject, QgsRasterLayer, QgsPointXY, QgsCoordinateTransform, QgsRectangle,
-                       QgsField, QgsGpsConnection)
+                       QgsField, QgsGpsConnection, QgsMapLayer)
 from datetime import datetime
 
 from custom_zoom_tool import CustomZoomTool
-from helper import create_geopackage_file, split_array_to_chunks, adjust_color, show_delete_confirmation, \
-    get_existing_layers, get_bing_layer
+from helper import (create_geopackage_file, split_array_to_chunks, adjust_color, show_delete_confirmation,
+                    get_existing_layers, get_bing_layer)
 from qgis.core import (QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer,
-                       QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis)
+                       QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis, QgsCoordinateReferenceSystem)
 from data.db_init import DbInit
 from stream_digitizing_tool import StreamDigitizingTool
 from multi_line_tool import MultiLineDigitizingTool
@@ -109,10 +109,11 @@ class DigitalSketchMappingTool:
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
 
-        # Save reference to the QGIS interface
+        self.iface = iface
+        self.actions = []
+
         self.created_layers_stack = deque()
         self.digitizing_tool = None
-        self.iface = iface
         self.canvas = self.iface.mapCanvas()
         self.folder_location = None
         self.feature_string = ""
@@ -135,9 +136,9 @@ class DigitalSketchMappingTool:
         self.multiline_tool = None
         self.polygon_tool = None
         self.point_tool = None
-        self.point_style = os.path.join(self.plugin_dir, "styles", "geolink_points_240325.qml")
-        self.polygon_style = os.path.join(self.plugin_dir, "styles", "geolink_polygons_240325.qml")
-        self.line_style = os.path.join(self.plugin_dir, "styles", "geolink_lines_240325.qml")
+        self.point_style = os.path.join(self.plugin_dir, "styles", "geolink_points_010525.qml")
+        self.polygon_style = os.path.join(self.plugin_dir, "styles", "geolink_polygons_010525.qml")
+        self.line_style = os.path.join(self.plugin_dir, "styles", "geolink_lines_010525.qml")
         self.clicked_buttons = set()
         self.text_changed = False
         self.project_crs = None
@@ -149,15 +150,15 @@ class DigitalSketchMappingTool:
         self.db_path = os.path.join(self.plugin_dir, "data", "keypad_data.sqlite")
         self.db_initializer = DbInit(self.db_path)
         self.new_project_removing_existing = False
+        self.sketch_layers_set = False
+        self.layers_to_be_added = None
 
-        # Location coordinates (longitude, latitude)
-        self.location_lon = 151.2093
-        self.location_lat = -33.8688
         self.iface.newProjectCreated.connect(self.on_project_create_or_read)
         self.iface.projectRead.connect(self.on_project_create_or_read)
 
         # initialize locale
-        locale = QSettings().value('locale/userLocale')[0:2]
+        locale_value = QSettings().value('locale/userLocale')
+        locale = locale_value[0:2] if locale_value else 'en'
         locale_path = os.path.join(
             self.plugin_dir,
             'i18n',
@@ -171,7 +172,6 @@ class DigitalSketchMappingTool:
         # Declare instance attributes
         self.actions = []
         self.menu = self.tr(u'&Digital Sketch Mapping Tool')
-        # TODO: We are going to let the user set this up in a future iteration
         self.toolbar = self.iface.addToolBar(u'DigitalSketchMappingTool')
         self.toolbar.setObjectName(u'DigitalSketchMappingTool')
 
@@ -286,11 +286,14 @@ class DigitalSketchMappingTool:
 
         QgsApplication.messageLog().logMessage(f"icon_path {icon_path}", 'DigitalSketchPlugin')
 
-        self.add_action(
+        action = self.add_action(
             icon_path,
             text=self.tr(u'Digital sketch mapping tool'),
             callback=self.run,
             parent=self.iface.mainWindow())
+
+        self.actions.append(action)
+        self.toolbar.addAction(action)
 
         self.digital_sketch_widget.zoomInPushButton.clicked.connect(lambda: self.zoom_to_map(True))
         self.digital_sketch_widget.zoomOutPushButton.clicked.connect(lambda: self.zoom_to_map(False))
@@ -360,15 +363,18 @@ class DigitalSketchMappingTool:
         QgsApplication.messageLog().logMessage(f"Directory path {folder}. add_bing: {self.attributes['add_bing_imagery']}", "DigitalSketchPlugin")
         if folder:
             self.folder_location = folder
+            self.folder_location_set = True
             if self.attributes['add_bing_imagery']:
                 self.load_bing_maps()
             self.create_geopackage_file(self.attributes['project_name'])
-            self.zoom_to_location()
+            # self.zoom_to_location()
 
     # --------------------------------------------------------------------------
 
     def set_layer_from_existing(self, layers):
         self.use_existing =True
+        self.sketch_layers_set = True
+
         self.point_layer = layers['points'] if "points" in layers else None
         self.polygon_layer = layers['polygons'] if "polygons" in layers else None
         self.line_layer = layers['lines'] if "lines" in layers else None
@@ -392,22 +398,25 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def zoom_to_location(self):
-        self.canvas.setDestinationCrs(QgsCoordinateReferenceSystem('EPSG:3857'))
+        # self.canvas.setDestinationCrs(QgsCoordinateReferenceSystem('EPSG:3857'))
+        #
+        # # Convert location coordinates to Web Mercator
+        # location_point = QgsPointXY(self.location_lon, self.location_lat)
+        # crs_src = QgsCoordinateReferenceSystem('EPSG:4326')
+        # crs_dest = QgsCoordinateReferenceSystem('EPSG:3857')
+        # xform = QgsCoordinateTransform(crs_src, crs_dest, QgsProject.instance())
+        # location_transformed = xform.transform(location_point)
+        #
+        # # Create an extent centered on location
+        # zoom_width = 20000  # meters
+        location_point = QgsPointXY(151.2093, -33.8688)
 
-        # Convert location coordinates to Web Mercator
-        location_point = QgsPointXY(self.location_lon, self.location_lat)
-        crs_src = QgsCoordinateReferenceSystem('EPSG:4326')
-        crs_dest = QgsCoordinateReferenceSystem('EPSG:3857')
-        xform = QgsCoordinateTransform(crs_src, crs_dest, QgsProject.instance())
-        location_transformed = xform.transform(location_point)
-
-        # Create an extent centered on location
-        zoom_width = 20000  # meters
+        zoom_width = 0.2  # degrees
         extent = QgsRectangle(
-            location_transformed.x() - zoom_width,
-            location_transformed.y() - zoom_width,
-            location_transformed.x() + zoom_width,
-            location_transformed.y() + zoom_width
+            location_point.x() - zoom_width,
+            location_point.y() - zoom_width,
+            location_point.x() + zoom_width,
+            location_point.y() + zoom_width
         )
 
         # Set the extent and refresh
@@ -516,9 +525,11 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def layer_removed(self, layer_id):
-        if 'sketch_' in layer_id:
+        if 'sketch_' in layer_id and self.sketch_layers_set:
             attr_box = self.digital_sketch_widget.categoryAttrVerticalLayout
             delete_keypad_items(attr_box)
+            self.check_for_current_selection()
+            self.reset_selection_digitize_tool()
             self.show_error_message('Sketch layer removed')
 
             if 'sketch_lines' in layer_id:
@@ -547,7 +558,7 @@ class DigitalSketchMappingTool:
         message.dismiss()
         if self.attributes is not None:
             self.attributes["use_existing"] = False
-        self.open_settings()
+        self.open_settings(True)
 
     # --------------------------------------------------------------------------
 
@@ -572,21 +583,23 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def open_settings(self):
+    def open_settings(self, disable_existing=False):
         QgsApplication.messageLog().logMessage("Open settings is called", 'DigitalSketchPlugin')
 
-        settings_dialog = AppSettingsDialog(self.keypad_manager, self.attributes)
+        settings_dialog = AppSettingsDialog(self.keypad_manager, self.attributes, disable_existing)
         if settings_dialog.exec_() == QDialog.Accepted:
             self.attributes = settings_dialog.get_attributes()
             self.selected_colour = self.attributes['feature_colour']
 
             if self.attributes['new_project']:
+                self.reset_selection_digitize_tool()
                 self.remove_layers()
                 self.set_folder_location()
+
             elif not self.folder_location_set and self.attributes['folder_path'] is not None:
-                self.folder_location_set = True
                 self.set_folder_location()
-            elif self.use_existing != self.attributes['use_existing']:
+
+            elif self.use_existing != self.attributes['use_existing'] and self.attributes['use_existing']:
                 self.set_layer_from_existing(self.attributes['layers'])
 
             if self.point_layer is not None and self.line_layer is not None and self.polygon_layer is not None:
@@ -598,6 +611,36 @@ class DigitalSketchMappingTool:
             bing_layer = get_bing_layer(self.bing_layer_name)
             if self.attributes['add_bing_imagery'] and not bool(bing_layer):
                 self.load_bing_maps()
+
+    # --------------------------------------------------------------------------
+
+    def add_previous_layers(self):
+        root = QgsProject.instance().layerTreeRoot()
+        for info in self.layers_to_be_added:
+            layer = None
+            if info["type"] == QgsMapLayer.VectorLayer:
+                layer = QgsVectorLayer(info["source"], info["name"], info["provider"])
+            elif info["type"] == QgsMapLayer.RasterLayer:
+                layer = QgsRasterLayer(info["source"], info["name"], info["provider"])
+            else:
+                print(f"Unsupported layer type: {info['type']} — {info['name']}")
+                continue
+
+            if not layer.isValid():
+                print(f"Invalid layer: {info['name']}")
+                continue
+
+            QgsProject.instance().addMapLayer(layer, addToLegend=False)
+
+            # Create group path
+            group = root
+            if info["group_path"]:
+                for name in info["group_path"].split("/"):
+                    group = group.findGroup(name) or group.addGroup(name)
+
+            # Add layer to group and set visibility
+            node = group.addLayer(layer)
+            node.setItemVisibilityChecked(info["visible"])
 
     # --------------------------------------------------------------------------
 
@@ -765,7 +808,7 @@ class DigitalSketchMappingTool:
         self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-points", f"{project_name}-sketch-points", "ogr")
         self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-lines", f"{project_name}-sketch-lines", "ogr")
         self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-polygons", f"{project_name}-sketch-polygons", "ogr")
-
+        self.sketch_layers_set = True
         QgsProject.instance().addMapLayer(self.polygon_layer)
         QgsProject.instance().addMapLayer(self.line_layer)
         QgsProject.instance().addMapLayer(self.point_layer)
@@ -918,13 +961,19 @@ class DigitalSketchMappingTool:
 
         #print "** UNLOAD DigitalSketchMappingTool"
 
-        # for action in self.actions:
-        #     self.iface.removePluginMenu(
-        #         self.tr(u'&Digital Sketch Mapping Tool'),
-        #         action)
-        #     self.iface.removeToolBarIcon(action)
-        # # remove the toolbar
-        # del self.toolbar
+        for action in self.actions:
+            self.iface.removePluginMenu(self.tr(u'&Digital Sketch Mapping Tool'), action)
+            self.iface.removeToolBarIcon(action)
+            try:
+                self.toolbar.removeAction(action)
+            except Exception:
+                pass
+            action.deleteLater()
+
+        if self.toolbar:
+            del self.toolbar
+
+        self.actions.clear()
 
     #--------------------------------------------------------------------------
 
