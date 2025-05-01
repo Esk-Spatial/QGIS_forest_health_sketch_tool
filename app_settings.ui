@@ -357,7 +357,7 @@ QLineEdit#projectNameLineEdit:read-only {
                <enum>QgsFileWidget::GetDirectory</enum>
               </property>
               <property name="relativeStorage">
-               <enum>QgsFileWidget::RelativeProject</enum>
+               <enum>QgsFileWidget::Absolute</enum>
               </property>
               <property name="options">
                <set>QFileDialog::ShowDirsOnly</set>
