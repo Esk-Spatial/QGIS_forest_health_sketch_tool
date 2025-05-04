@@ -25,7 +25,7 @@ def get_category_element(text):
     return text.split(':')
 
 class AppSettingsDialog(QDialog, FORM_CLASS):
-    def __init__(self, keypad_manager, attributes, parent=None):
+    def __init__(self, keypad_manager, attributes, disable_existing=False, parent=None):
         super(AppSettingsDialog, self).__init__(parent)
         self.add_bing_imagery = False
         self.setupUi(self)
@@ -47,7 +47,6 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.project_changed = False
         self.new_project = False
 
-
         if attributes is not None:
             self.projectNameLineEdit.setText(attributes["project_name"])
             if attributes["project_name"] is not None and attributes["project_name"] != '':
@@ -66,9 +65,10 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             if attributes["use_existing"]:
                 self.toggle_project_name_and_file_read_only_state(True)
             self.project_changed = attributes['project_changed'] if attributes['project_changed'] is not None else False
-            if attributes['project_changed']:
-                self.clear_selection()
             self.bingImageryCheckBox.setChecked(attributes["add_bing_imagery"])
+
+        if disable_existing:
+            self.useExistingLayerCheckBox.setDisabled(True)
 
         self.updated_settings = False
         self.clear_and_populate_categories()

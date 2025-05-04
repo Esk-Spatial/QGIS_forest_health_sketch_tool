@@ -2,6 +2,7 @@
 from qgis.gui import QgsMapTool, QgsRubberBand
 from qgis.core import QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry, QgsApplication, QgsProject
 from PyQt5.QtCore import Qt
+from qgis.PyQt.QtGui import QColor
 
 from helper import update_feature_attributes, reproject_to_layer_crs
 
@@ -19,6 +20,8 @@ class StreamDigitizingTool(QgsMapTool):
         self.rubber_band = QgsRubberBand(self.iface.mapCanvas(),
                                          QgsWkbTypes.PointGeometry if layer_type == 'points' else QgsWkbTypes.PolygonGeometry)
         self.rubber_band.setColor(Qt.red)
+        if layer_type == 'polygons':
+            self.rubber_band.setFillColor(QColor(255, 0, 0, 25))
         self.rubber_band.setWidth(2)
 
     def canvasPressEvent(self, event):
