@@ -303,6 +303,7 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.settingPushButton.clicked.connect(self.open_settings)
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
         self.digital_sketch_widget.deletePushButton.clicked.connect(self.remove_feature)
+        self.digital_sketch_widget.ceteroidPushButton.clicked.connect(self.center_and_rotate_map)
 
         self.digital_sketch_widget.codeLineEdit.textEdited.connect(self.code_text_changed)
         self.digital_sketch_widget.codeLineEdit.editingFinished.connect(self.code_text_changed_finished)
@@ -315,6 +316,31 @@ class DigitalSketchMappingTool:
             lambda: self.setup_digitizing(self.polygon_layer, 'polygons'))
 
         QgsProject.instance().layerRemoved.connect(self.layer_removed)
+
+    # --------------------------------------------------------------------------
+
+    def center_and_rotate_map(self):
+        connections = QgsApplication.gpsConnectionRegistry().connectionList()
+        if not connections or len(connections) == 0:
+            QgsApplication.messageLog().logMessage(f"gps {len(connections)}", 'DigitalSketchPlugin')
+        else:
+            gps_connection = connections[0]
+            gps_connection.positionChanged.connect(self.recenter_if_outside_extent)
+
+    # --------------------------------------------------------------------------
+
+    def recenter_if_outside_extent(self, position):
+        """Recenter the map if the position is outside the extent"""
+        map_extent = self.iface.mapCanvas().extent()
+        buffer_ratio = 0.3
+
+
+        extent = self.point_layer.extent()
+        if extent.contains(position):
+            self.point_layer.setExtent(extent)
+            self.point_layer.refresh()
+            self.point_layer.setExtent(extent)
+            self.point_layer.refresh()
 
     # --------------------------------------------------------------------------
 
