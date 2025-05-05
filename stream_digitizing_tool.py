@@ -84,6 +84,13 @@ class StreamDigitizingTool(QgsMapTool):
         feature.setGeometry(geom)
         self.pending_features.append(feature)
 
+    def features_to_save(self):
+        """Checks if there are any features to save"""
+        if self.layer_type == 'points':
+            return len(self.pending_features) > 0
+        else:
+            return len(self.stream_points) > 0
+
     def save_feature(self, attributes):
         if self.layer_type != 'points':
             self.populate_feature_for_polygon()

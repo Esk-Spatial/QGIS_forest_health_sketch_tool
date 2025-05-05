@@ -85,7 +85,7 @@
 }</string>
         </property>
         <property name="title">
-         <string>Project Name and Location</string>
+         <string>Sketch Name and Location</string>
         </property>
         <layout class="QVBoxLayout" name="verticalLayout_3">
          <property name="spacing">
@@ -220,7 +220,7 @@
                </size>
               </property>
               <property name="text">
-               <string>Project Name</string>
+               <string>Sketch Name</string>
               </property>
              </widget>
             </item>

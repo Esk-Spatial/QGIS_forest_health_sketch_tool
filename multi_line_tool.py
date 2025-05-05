@@ -49,6 +49,11 @@ class MultiLineDigitizingTool(QgsMapTool):
 
         self.rubber_band.setToGeometry(QgsGeometry(multi_line), None)
 
+    def features_to_save(self):
+        """Checks if there are any lines to save"""
+        return len(self.multi_line_segments) > 0
+
+
     def save_feature(self, attributes):
         """Saves the drawn MultiLineString to the layer"""
         if not self.multi_line_segments:

@@ -136,9 +136,9 @@ class DigitalSketchMappingTool:
         self.multiline_tool = None
         self.polygon_tool = None
         self.point_tool = None
-        self.point_style = os.path.join(self.plugin_dir, "styles", "geolink_points_010525.qml")
-        self.polygon_style = os.path.join(self.plugin_dir, "styles", "geolink_polygons_010525.qml")
-        self.line_style = os.path.join(self.plugin_dir, "styles", "geolink_lines_010525.qml")
+        self.point_style = os.path.join(self.plugin_dir, "styles", "geolink_points_240325.qml")
+        self.polygon_style = os.path.join(self.plugin_dir, "styles", "geolink_polygons_240325.qml")
+        self.line_style = os.path.join(self.plugin_dir, "styles", "geolink_lines_240325.qml")
         self.clicked_buttons = set()
         self.text_changed = False
         self.project_crs = None
@@ -341,7 +341,7 @@ class DigitalSketchMappingTool:
         try:
             QgsProject.instance().layerRemoved.disconnect(self.layer_removed)
         except Exception as e:
-            QgsApplication.messageLog().logMessage(f"error byuub: {e}", "DigitalSketchPlugin")
+            QgsApplication.messageLog().logMessage(f"error: {e}", "DigitalSketchPlugin")
 
         try:
             bing_layer = get_bing_layer(self.bing_layer_name)
@@ -645,19 +645,25 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def done_digitizing(self):
-        if self.pressed_btn is None:
-            self.iface.messageBar().pushMessage("Error", "There is no feature(s) created to be added",
-                                                level=Qgis.Critical, duration=5)
+        if self.digitizing_tool is None:
+            self.iface.messageBar().pushMessage("Info", "The Digitizing tool is not active. Please use the polygon, point and line sketch buttons to create your sketch.",
+                                                level=Qgis.Info, duration=5)
             return
 
-        QgsApplication.messageLog().logMessage("Done Digitizing is called", 'DigitalSketchPlugin')
-        self.clear_current_btn_selection()
-        self.clicked_buttons.clear()
-        self.text_changed = False
-        code_attr = self.feature_string if not self.text_changed else self.get_code_txt()
-        attributes = dict(colour=self.selected_colour, code=code_attr, surveyor=self.attributes['surveyor'],
-                          type_txt=self.attributes['type_txt'])
-        self.digitizing_tool.save_feature(attributes)
+        elif not self.digitizing_tool.features_to_save():
+            self.iface.messageBar().pushMessage("Info", "There is no sketch to be stored.",
+                                                level=Qgis.Info, duration=5)
+            return
+
+        else:
+            QgsApplication.messageLog().logMessage("Done Digitizing is called", 'DigitalSketchPlugin')
+            self.clear_current_btn_selection()
+            self.clicked_buttons.clear()
+            self.text_changed = False
+            code_attr = self.feature_string if not self.text_changed else self.get_code_txt()
+            attributes = dict(colour=self.selected_colour, code=code_attr, surveyor=self.attributes['surveyor'],
+                              type_txt=self.attributes['type_txt'])
+            self.digitizing_tool.save_feature(attributes)
 
     # --------------------------------------------------------------------------
 

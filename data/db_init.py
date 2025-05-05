@@ -15,7 +15,10 @@ data = [
     {"category": "INCIDENCE", "selected": False, "colour": "#FFFFe0", "items": ["1-5%", "5-15%", "15-30%", "30-45%", "45-75%", ">75%"]},
     {"category": "CLIMATE", "selected": False, "colour": "#D5D5D5", "items": ["Frost_", "Fire_", "Snow_", "Wind_", "L_", "Hail_"]},
     {"category": "SEVERITY", "selected": False, "colour": "#ADD8E6", "items": ["Low", "Moderate", "High", "Extreme"]},
-    {"category": "GROUND", "selected": False, "colour": "#FFFFFF", "items": ["_Sirex", "_Drought", "_Root-H2O", "_Cyc", "_Essi", "_Herb", "_Etops", "_Yel-Tops"]}
+    {"category": "GROUND", "selected": False, "colour": "#FFFFFF", "items": ["_Sirex", "_Drought", "_Root-H2O", "_Cyc", "_Essi", "_Herb", "_Etops", "_Yel-Tops"]},
+    {"category": "Defoliating pests", "selected":False, "colour":"#FFA07A", "items":["Trace (0-10%)","Trace low","Low (10-20%)","Low Medium","Medium (20-40%)","Medium High","High (40-50%)","Severe (>50%)"]},
+    {"category": "Ips and Diplodia", "selected":False, "colour":"#90EE90", "items":["Trace (<1- 2%)","Low (3 - 5%)","Medium (5 - 10%)","High (11 - 15%)","Severe (>15%)"]},
+    {"category": "Sirex", "selected":False, "colour":"#87CEFA", "items":["Low (<1%)","Medium (1-3%)","Severe (>3%)"]}
 ]
 
 class DbInit:
