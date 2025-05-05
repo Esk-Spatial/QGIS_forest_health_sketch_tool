@@ -152,6 +152,7 @@ class DigitalSketchMappingTool:
         self.new_project_removing_existing = False
         self.sketch_layers_set = False
         self.layers_to_be_added = None
+        self.gps_connection = None
 
         self.iface.newProjectCreated.connect(self.on_project_create_or_read)
         self.iface.projectRead.connect(self.on_project_create_or_read)
@@ -324,23 +325,23 @@ class DigitalSketchMappingTool:
         if not connections or len(connections) == 0:
             QgsApplication.messageLog().logMessage(f"gps {len(connections)}", 'DigitalSketchPlugin')
         else:
-            gps_connection = connections[0]
-            gps_connection.positionChanged.connect(self.recenter_if_outside_extent)
+            self.gps_connection = connections[0]
+            self.gps_connection.positionChanged.connect(self.recenter_if_outside_extent)
 
     # --------------------------------------------------------------------------
 
     def recenter_if_outside_extent(self, position):
         """Recenter the map if the position is outside the extent"""
+        try:
+            self.gps_connection.positionChanged.disconnect(self.recenter_if_outside_extent)
+        except Exception as e:
+            QgsApplication.messageLog().logMessage(f"error: {e}", "DigitalSketchPlugin")
+
         map_extent = self.iface.mapCanvas().extent()
         buffer_ratio = 0.3
+        QgsApplication.messageLog().logMessage(f"position: {position.x()} {position.y()}", "DigitalSketchPlugin")
+        QgsApplication.messageLog().logMessage(f"map_extent: {map_extent.xMin()} {map_extent.yMin()} {map_extent.xMax()} {map_extent.yMax()}", "DigitalSketchPlugin")
 
-
-        extent = self.point_layer.extent()
-        if extent.contains(position):
-            self.point_layer.setExtent(extent)
-            self.point_layer.refresh()
-            self.point_layer.setExtent(extent)
-            self.point_layer.refresh()
 
     # --------------------------------------------------------------------------
 
