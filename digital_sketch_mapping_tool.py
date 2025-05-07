@@ -37,10 +37,12 @@ from datetime import datetime
 
 from custom_zoom_tool import CustomZoomTool
 from helper import (create_geopackage_file, split_array_to_chunks, adjust_color, show_delete_confirmation,
-                    get_existing_layers, get_bing_layer)
+                    get_existing_layers, get_bing_layer, get_existing_enabled_layers, get_default_button_height,
+                    get_default_button_width, get_default_button_font, get_default_button_font_colour)
 from qgis.core import (QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer,
                        QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis, QgsCoordinateReferenceSystem)
 from data.db_init import DbInit
+from select_existing_layer import SelectExistingLayerDialog
 from stream_digitizing_tool import StreamDigitizingTool
 from multi_line_tool import MultiLineDigitizingTool
 from feature_identify_tool import FeatureIdentifyTool
@@ -117,7 +119,7 @@ class DigitalSketchMappingTool:
         self.canvas = self.iface.mapCanvas()
         self.folder_location = None
         self.feature_string = ""
-        self.selected_colour = "#3dc61780"
+        self.selected_colour = "#7a3dc617"
         self.folder_location_set = False
         self.use_existing = False
         self.point_layer = None
@@ -153,8 +155,8 @@ class DigitalSketchMappingTool:
         self.sketch_layers_set = False
         self.layers_to_be_added = None
 
-        self.iface.newProjectCreated.connect(self.on_project_create_or_read)
-        self.iface.projectRead.connect(self.on_project_create_or_read)
+        self.iface.newProjectCreated.connect(self.on_new_project_created)
+        self.iface.projectRead.connect(self.on_new_project_loaded)
 
         # initialize locale
         locale_value = QSettings().value('locale/userLocale')
@@ -179,6 +181,7 @@ class DigitalSketchMappingTool:
 
         self.pluginIsActive = False
         self.digital_sketch_widget = DigitalSketchMappingToolDockWidget()
+        self.digital_sketch_widget.visibilityChanged.connect(self.widget_opened)
 
 
     # noinspection PyMethodMayBeStatic
@@ -318,6 +321,12 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
+    def widget_opened(self, visible):
+        if visible and not self.sketch_layers_set:
+            self.check_for_sketch_layers()
+
+    # --------------------------------------------------------------------------
+
     def init_database_if_not_exists(self):
         if not os.path.exists(self.db_path):
             db_init_path = os.path.join(self.plugin_dir, 'data', 'db_init.py')
@@ -326,22 +335,46 @@ class DigitalSketchMappingTool:
 
             else:
                 raise FileNotFoundError("data/db_init.py not found to initialize the database.")
+
     # --------------------------------------------------------------------------
 
-    def on_project_create_or_read(self):
-        QgsApplication.messageLog().logMessage('project create/read', 'DigitalSketchPlugin')
+    def on_new_project_created(self):
+        self.project_created_or_loaded()
+        if len(self.iface.messageBar().items()) > 0:
+            for item in self.iface.messageBar().items():
+                self.iface.messageBar().popWidget(item)
+    # --------------------------------------------------------------------------
+
+    def on_new_project_loaded(self):
+        self.project_created_or_loaded()
+        if self.pluginIsActive:
+            self.check_for_sketch_layers()
+
+    # --------------------------------------------------------------------------
+
+    def project_created_or_loaded(self):
+        QgsApplication.messageLog().logMessage('project created/loaded', 'DigitalSketchPlugin')
         self.folder_location_set = False
         self.use_existing = False
         if self.attributes is not None:
             self.attributes["project_changed"] = True
 
+
     # --------------------------------------------------------------------------
+
+    def check_for_sketch_layers(self):
+        layer_groups = get_existing_enabled_layers()
+        if len(layer_groups['points']) > 0 and len(layer_groups['polygons']) > 0 and len(layer_groups['lines']) > 0:
+            layer_selection = SelectExistingLayerDialog(layer_groups)
+            if layer_selection.exec_() == QDialog.Accepted:
+                self.set_layer_from_existing(layer_selection.get_layer_selection())
+                self.populate_categories()
 
     def remove_layers(self):
         try:
             QgsProject.instance().layerRemoved.disconnect(self.layer_removed)
         except Exception as e:
-            QgsApplication.messageLog().logMessage(f"error byuub: {e}", "DigitalSketchPlugin")
+            QgsApplication.messageLog().logMessage(f"error: {e}", "DigitalSketchPlugin")
 
         try:
             bing_layer = get_bing_layer(self.bing_layer_name)
@@ -655,8 +688,10 @@ class DigitalSketchMappingTool:
         self.clicked_buttons.clear()
         self.text_changed = False
         code_attr = self.feature_string if not self.text_changed else self.get_code_txt()
-        attributes = dict(colour=self.selected_colour, code=code_attr, surveyor=self.attributes['surveyor'],
-                          type_txt=self.attributes['type_txt'])
+        surveyor = self.attributes['surveyor'] if self.attributes is not None else ""
+        type_txt = self.attributes['type_txt'] if self.attributes is not None else ""
+        attributes = dict(colour=self.selected_colour, code=code_attr, surveyor=surveyor,
+                          type_txt=type_txt)
         self.digitizing_tool.save_feature(attributes)
 
     # --------------------------------------------------------------------------
@@ -850,7 +885,10 @@ class DigitalSketchMappingTool:
         margin = QMargins(1,1,1,1)
         layout = QHBoxLayout()
         layout.setContentsMargins(margin)
-        height = self.attributes["height"]
+        height = self.attributes["height"] if self.attributes is not None else get_default_button_height()
+        width = self.attributes["width"] if self.attributes is not None else get_default_button_width()
+        font = self.attributes["font"] if self.attributes is not None else get_default_button_font()
+        font_colour = self.attributes["colour"] if self.attributes is not None else get_default_button_font_colour()
         widget = QWidget()
         widget.setMinimumHeight(height + 1)
         widget.setMaximumHeight(height + 1)
@@ -860,14 +898,14 @@ class DigitalSketchMappingTool:
             btn = QPushButton(i["item"])
             btn.setMinimumHeight(height)
             btn.setMaximumHeight(height)
-            btn.setMinimumWidth(self.attributes["width"])
-            btn.setMaximumWidth(self.attributes["width"])
-            btn.setFont(self.attributes["font"])
+            btn.setMinimumWidth(width)
+            btn.setMaximumWidth(width)
+            btn.setFont(font)
             btn.setCheckable(True)
             btn.setStyleSheet(f"""
                             QPushButton {{
                                 background-color: {i["colour"]};
-                                color: {self.attributes["colour"]};
+                                color: {font_colour};
                                 border-radius: 5px;
                                 padding: 2px 2px;
                             }}
