@@ -1,1 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--!Font Awesome Pro 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license (Commercial License) Copyright 2025 Fonticons, Inc.--><path class="fa-secondary" opacity=".4" d="M16 48l0 416 416 0 0-313.4L329.4 48 320 48l0 136c0 4.4-3.6 8-8 8L72 192c-4.4 0-8-3.6-8-8L64 48 16 48zM312 328a88 88 0 1 1 -176 0 88 88 0 1 1 176 0z"/><path class="fa-primary" d="M16 480L0 480l0-16L0 48 0 32l16 0 320 0L448 144l0 320 0 16-16 0L16 480zm416-16l0-313.4L329.4 48 320 48l0 136c0 4.4-3.6 8-8 8L72 192c-4.4 0-8-3.6-8-8L64 48 16 48l0 416 416 0zM80 48l0 128 224 0 0-128L80 48zm72 280a72 72 0 1 0 144 0 72 72 0 1 0 -144 0zm72 88a88 88 0 1 1 0-176 88 88 0 1 1 0 176z"/></svg>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 448 512"
+   version="1.1"
+   id="svg2"
+   sodipodi:docname="floppy-disk-sharp-duotone-thin.svg"
+   inkscape:version="1.3 (0e150ed6c4, 2023-07-21)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs2" />
+  <sodipodi:namedview
+     id="namedview2"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="1.5058594"
+     inkscape:cx="224.12451"
+     inkscape:cy="256"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="2392"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg2" />
+  <!--!Font Awesome Pro 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license (Commercial License) Copyright 2025 Fonticons, Inc.-->
+  <path
+     class="fa-secondary"
+     opacity=".4"
+     d="M16 48l0 416 416 0 0-313.4L329.4 48 320 48l0 136c0 4.4-3.6 8-8 8L72 192c-4.4 0-8-3.6-8-8L64 48 16 48zM312 328a88 88 0 1 1 -176 0 88 88 0 1 1 176 0z"
+     id="path1"
+     style="fill:#999999" />
+  <path
+     class="fa-primary"
+     d="M16 480L0 480l0-16L0 48 0 32l16 0 320 0L448 144l0 320 0 16-16 0L16 480zm416-16l0-313.4L329.4 48 320 48l0 136c0 4.4-3.6 8-8 8L72 192c-4.4 0-8-3.6-8-8L64 48 16 48l0 416 416 0zM80 48l0 128 224 0 0-128L80 48zm72 280a72 72 0 1 0 144 0 72 72 0 1 0 -144 0zm72 88a88 88 0 1 1 0-176 88 88 0 1 1 0 176z"
+     id="path2" />
+</svg>
