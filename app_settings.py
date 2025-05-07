@@ -10,7 +10,7 @@ from PyQt5.QtCore import Qt
 
 from add_or_edit_element import AddOrEditElement
 from confirmation import ConfirmationDialog
-from helper import show_delete_confirmation
+from helper import show_delete_confirmation, get_existing_enabled_layers
 from new_category import NewCategory
 from select_existing_layer import SelectExistingLayerDialog
 
@@ -273,7 +273,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
     def set_use_existing(self, state):
         self.use_existing_layer = state == Qt.Checked
         if self.use_existing_layer:
-            layer_selection = SelectExistingLayerDialog()
+            layer_selection = SelectExistingLayerDialog(get_existing_enabled_layers())
             if layer_selection.exec_() == QDialog.Accepted:
                 self.layers = layer_selection.get_layer_selection()
                 self.toggle_project_name_and_file_read_only_state(True)

@@ -27,25 +27,10 @@ def get_selection_layer(items, combo_box):
 
 
 class SelectExistingLayerDialog(QDialog, FORM_CLASS):
-    def __init__(self, parent=None):
+    def __init__(self, layer_groups, parent=None):
         super(SelectExistingLayerDialog, self).__init__(parent)
         self.setupUi(self)
-        self.layer_groups = {
-            'points': [],
-            'polygons': [],
-            'lines': []
-        }
-
-        existing_layers = get_existing_enabled_layers()
-
-        for l_id, layer in existing_layers.items():
-            entry = {'name': layer.name(), 'layer': layer}
-            if 'sketch-points' in layer.name():
-                self.layer_groups['points'].append(entry)
-            elif 'sketch-polygons' in layer.name():
-                self.layer_groups['polygons'].append(entry)
-            elif 'sketch-lines' in layer.name():
-                self.layer_groups['lines'].append(entry)
+        self.layer_groups = layer_groups
 
         add_items_to_combo_box(self.layer_groups['points'], self.pointsComboBox)
         add_items_to_combo_box(self.layer_groups['polygons'], self.polygonsComboBox)

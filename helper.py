@@ -13,7 +13,9 @@ try:
 except ImportError:
     import osr
 
-from qgis.PyQt.QtGui import QColor
+import platform
+
+from qgis.PyQt.QtGui import QColor, QFont
 from qgis.core import QgsCoordinateTransform, QgsProject, QgsApplication, QgsLayerTreeGroup, QgsLayerTreeLayer
 
 def create_geopackage_file(path, crs=None):
@@ -147,7 +149,22 @@ def get_existing_enabled_layers():
            "sketch-" in layer.name()
     }
 
-    return enabled_layers
+    layer_groups = {
+        'points': [],
+        'polygons': [],
+        'lines': []
+    }
+
+    for l_id, layer in enabled_layers.items():
+        entry = {'name': layer.name(), 'layer': layer}
+        if 'sketch-points' in layer.name():
+            layer_groups['points'].append(entry)
+        elif 'sketch-polygons' in layer.name():
+            layer_groups['polygons'].append(entry)
+        elif 'sketch-lines' in layer.name():
+            layer_groups['lines'].append(entry)
+
+    return layer_groups
 
 def get_existing_layers():
     existing_layers = QgsProject.instance().mapLayers(validOnly=True)
@@ -172,3 +189,22 @@ def get_bing_layer(name):
     }
 
     return layer
+
+def get_default_button_height():
+    return 26
+
+def get_default_button_width():
+    return 174
+
+def get_default_button_font():
+    system = platform.system()
+    font = QFont()
+    if system == 'Darwin':
+        font.fromString(".AppleSystemUIFont,11,-1,5,50,0,0,0,0,0")
+    else:
+        font.fromString("MS Shell Dlg 2,11,-1,5,50,0,0,0,0,0")
+
+    return font
+
+def get_default_button_font_colour():
+    return "#000000"
