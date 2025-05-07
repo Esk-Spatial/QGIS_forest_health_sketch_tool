@@ -3,7 +3,7 @@ from qgis.core import (QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry, QgsMult
                        QgsApplication)
 from PyQt5.QtCore import Qt
 
-from helper import update_feature_attributes, reproject_to_layer_crs
+from helper import update_feature_attributes, reproject_to_destination_crs
 
 
 class MultiLineDigitizingTool(QgsMapTool):
@@ -65,7 +65,7 @@ class MultiLineDigitizingTool(QgsMapTool):
         multi_line = self.get_multiline_string()
 
         if canvas_crs != layer_crs:
-            multi_line = reproject_to_layer_crs(multi_line, canvas_crs, layer_crs)
+            multi_line = reproject_to_destination_crs(multi_line, canvas_crs, layer_crs)
 
         feature = QgsFeature(self.layer.fields())
         feature.setGeometry(QgsGeometry(multi_line))

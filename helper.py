@@ -125,7 +125,7 @@ def show_delete_confirmation(text):
     delete_confirmation =  DeleteConfirmationDialog(text)
     return delete_confirmation.exec_()
 
-def reproject_to_layer_crs(geometry, source_crs, destination_crs):
+def reproject_to_destination_crs(geometry, source_crs, destination_crs):
     transform = QgsCoordinateTransform(source_crs, destination_crs, QgsProject.instance())
     try:
         geometry.transform(transform)

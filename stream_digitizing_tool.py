@@ -4,7 +4,7 @@ from qgis.core import QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry, QgsAppli
 from PyQt5.QtCore import Qt
 from qgis.PyQt.QtGui import QColor
 
-from helper import update_feature_attributes, reproject_to_layer_crs
+from helper import update_feature_attributes, reproject_to_destination_crs
 
 
 class StreamDigitizingTool(QgsMapTool):
@@ -63,7 +63,7 @@ class StreamDigitizingTool(QgsMapTool):
         layer_crs = self.layer.crs()
 
         if canvas_crs != layer_crs:
-            geom = reproject_to_layer_crs(geom, canvas_crs, layer_crs)
+            geom = reproject_to_destination_crs(geom, canvas_crs, layer_crs)
 
         feature = QgsFeature(self.layer.fields())
         feature.setGeometry(geom)
@@ -78,7 +78,7 @@ class StreamDigitizingTool(QgsMapTool):
         layer_crs = self.layer.crs()
         geom = QgsGeometry.fromPointXY(point)
         if canvas_crs != layer_crs:
-            geom = reproject_to_layer_crs(geom, canvas_crs, layer_crs)
+            geom = reproject_to_destination_crs(geom, canvas_crs, layer_crs)
 
         feature = QgsFeature(self.layer.fields())
         feature.setGeometry(geom)

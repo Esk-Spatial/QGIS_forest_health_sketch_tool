@@ -37,9 +37,10 @@ from datetime import datetime
 
 from custom_zoom_tool import CustomZoomTool
 from helper import (create_geopackage_file, split_array_to_chunks, adjust_color, show_delete_confirmation,
-                    get_existing_layers, get_bing_layer)
+                    get_existing_layers, get_bing_layer, reproject_to_destination_crs)
 from qgis.core import (QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer,
-                       QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis, QgsCoordinateReferenceSystem)
+                       QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis, QgsCoordinateReferenceSystem,
+                       QgsGeometry)
 from data.db_init import DbInit
 from stream_digitizing_tool import StreamDigitizingTool
 from multi_line_tool import MultiLineDigitizingTool
@@ -53,6 +54,7 @@ from .resources import *
 # Import the code for the DockWidget
 from .digital_sketch_mapping_tool_dockwidget import DigitalSketchMappingToolDockWidget
 import os.path
+import math
 
 try:
     from osgeo import ogr
@@ -321,9 +323,10 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def center_and_rotate_map(self):
+        QgsApplication.messageLog().logMessage(f"center and rotate called ********* \n\n", 'DigitalSketchPlugin')
         connections = QgsApplication.gpsConnectionRegistry().connectionList()
         if not connections or len(connections) == 0:
-            QgsApplication.messageLog().logMessage(f"gps {len(connections)}", 'DigitalSketchPlugin')
+            self.iface.messageBar().pushMessage("Info", "Check GPS Connection.", level=Qgis.Warning, duration=5)
         else:
             self.gps_connection = connections[0]
             self.gps_connection.positionChanged.connect(self.recenter_if_outside_extent)
@@ -332,16 +335,51 @@ class DigitalSketchMappingTool:
 
     def recenter_if_outside_extent(self, position):
         """Recenter the map if the position is outside the extent"""
+        bearing = (-self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Bearing)+360) % 360
+        bearing_r = math.radians(self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Bearing))
+        map_crs = self.canvas.mapSettings().destinationCrs()
+        source_crs = QgsCoordinateReferenceSystem("EPSG:4326")
+        dest_crs = QgsCoordinateReferenceSystem("EPSG:3857")
+        normal_transformer = QgsCoordinateTransform(source_crs, dest_crs, QgsProject.instance())
+        normal_retransformer = QgsCoordinateTransform(dest_crs, source_crs, QgsProject.instance())
+        normal_map_transformer = QgsCoordinateTransform(map_crs, dest_crs, QgsProject.instance())
+
         try:
             self.gps_connection.positionChanged.disconnect(self.recenter_if_outside_extent)
         except Exception as e:
             QgsApplication.messageLog().logMessage(f"error: {e}", "DigitalSketchPlugin")
 
-        map_extent = self.iface.mapCanvas().extent()
+        gps_point = QgsPointXY(position.x(), position.y())
+        gps_point_mv = QgsPointXY(position.x() + 0.3, position.y() + 0.3)
+        gps_point_dest = normal_transformer.transform(gps_point)
+        map_extent = self.canvas.extent()
+        map_extent_dest = normal_map_transformer.transformBoundingBox(map_extent)
+        extent_width = map_extent_dest.width()
+        extent_height = map_extent_dest.height()
+        extent_diagonal = math.hypot(extent_width, extent_height)  # √(w² + h²)
         buffer_ratio = 0.3
-        QgsApplication.messageLog().logMessage(f"position: {position.x()} {position.y()}", "DigitalSketchPlugin")
-        QgsApplication.messageLog().logMessage(f"map_extent: {map_extent.xMin()} {map_extent.yMin()} {map_extent.xMax()} {map_extent.yMax()}", "DigitalSketchPlugin")
 
+        offset_distance = buffer_ratio * extent_diagonal
+        offset_x = math.sin(bearing_r) * offset_distance
+        offset_y = math.cos(bearing_r) * offset_distance
+
+        # screen_height = math.sqrt(math.pow((map_extent.xMaximum() - map_extent.xMinimum()),2) + math.pow((map_extent.yMaximum() - map_extent.yMinimum()), 2))
+        x_centroid = gps_point_dest.x() #+ offset_x
+        y_centroid = gps_point_dest.y() + offset_y
+
+
+        QgsApplication.messageLog().logMessage(f"\nextent_width: {extent_width} extent_height: {extent_height} extent_diagonal: {extent_diagonal}\n"
+                                               f"GPS: ({gps_point.x()}, {gps_point.y()})\n"
+                                               f"GPS Dest: ({gps_point_dest.x()}, {gps_point_dest.y()})\n"
+                                               f"Offset: ({offset_x}, {offset_y})\n"
+                                               f"New Center: ({x_centroid}, {y_centroid})\n"
+                                               f"Bearing: {bearing:.2f}°  Rad: {bearing_r:.2f}", "DigitalSketchPlugin")
+
+        new_centre_dest = QgsPointXY(x_centroid, y_centroid)
+        new_centre_src = normal_retransformer.transform(new_centre_dest)
+        self.iface.mapCanvas().setCenter(gps_point)
+        self.iface.mapCanvas().setRotation(bearing)
+        self.iface.mapCanvas().refresh()
 
     # --------------------------------------------------------------------------
 
