@@ -140,9 +140,9 @@ class DigitalSketchMappingTool:
         self.multiline_tool = None
         self.polygon_tool = None
         self.point_tool = None
-        self.point_style = os.path.join(self.plugin_dir, "styles", "geolink_points_240325.qml")
-        self.polygon_style = os.path.join(self.plugin_dir, "styles", "geolink_polygons_240325.qml")
-        self.line_style = os.path.join(self.plugin_dir, "styles", "geolink_lines_240325.qml")
+        self.point_style = os.path.join(self.plugin_dir, "styles", "geolink_points_010525.qml")
+        self.polygon_style = os.path.join(self.plugin_dir, "styles", "geolink_polygons_010525.qml")
+        self.line_style = os.path.join(self.plugin_dir, "styles", "geolink_lines_010525.qml")
         self.clicked_buttons = set()
         self.text_changed = False
         self.project_crs = None
@@ -309,7 +309,7 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.settingPushButton.clicked.connect(self.open_settings)
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
         self.digital_sketch_widget.deletePushButton.clicked.connect(self.remove_feature)
-        self.digital_sketch_widget.ceteroidPushButton.clicked.connect(self.center_and_rotate_map)
+        self.digital_sketch_widget.centerAndRotatePushButton.clicked.connect(self.center_and_rotate_map)
 
         self.digital_sketch_widget.codeLineEdit.textEdited.connect(self.code_text_changed)
         self.digital_sketch_widget.codeLineEdit.editingFinished.connect(self.code_text_changed_finished)
@@ -344,51 +344,58 @@ class DigitalSketchMappingTool:
 
     def recenter_if_outside_extent(self, position):
         """Recenter the map if the position is outside the extent"""
-        bearing = (-self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Bearing)+360) % 360
-        bearing_r = math.radians(self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Bearing))
-        map_crs = self.canvas.mapSettings().destinationCrs()
-        source_crs = QgsCoordinateReferenceSystem("EPSG:4326")
-        dest_crs = QgsCoordinateReferenceSystem("EPSG:3857")
-        normal_transformer = QgsCoordinateTransform(source_crs, dest_crs, QgsProject.instance())
-        normal_retransformer = QgsCoordinateTransform(dest_crs, source_crs, QgsProject.instance())
-        normal_map_transformer = QgsCoordinateTransform(map_crs, dest_crs, QgsProject.instance())
+        bearing_val = self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Bearing)
+        if bearing_val is not None:
+            try:
+                self.gps_connection.positionChanged.disconnect(self.recenter_if_outside_extent)
+            except Exception as e:
+                QgsApplication.messageLog().logMessage(f"error: {e}", "DigitalSketchPlugin")
 
-        try:
-            self.gps_connection.positionChanged.disconnect(self.recenter_if_outside_extent)
-        except Exception as e:
-            QgsApplication.messageLog().logMessage(f"error: {e}", "DigitalSketchPlugin")
+            map_settings = self.canvas.mapSettings()
+            map_crs = map_settings.destinationCrs()
 
-        gps_point = QgsPointXY(position.x(), position.y())
-        gps_point_mv = QgsPointXY(position.x() + 0.3, position.y() + 0.3)
-        gps_point_dest = normal_transformer.transform(gps_point)
-        map_extent = self.canvas.extent()
-        map_extent_dest = normal_map_transformer.transformBoundingBox(map_extent)
-        extent_width = map_extent_dest.width()
-        extent_height = map_extent_dest.height()
-        extent_diagonal = math.hypot(extent_width, extent_height)  # √(w² + h²)
-        buffer_ratio = 0.3
+            rotation = (-bearing_val+360)
+            self.canvas.setRotation(rotation)
+            self.canvas.refresh()
 
-        offset_distance = buffer_ratio * extent_diagonal
-        offset_x = math.sin(bearing_r) * offset_distance
-        offset_y = math.cos(bearing_r) * offset_distance
+            # Get GPS point in map CRS
+            gps_point = QgsPointXY(position.x(), position.y())
+            gps_point_map = gps_point
+            if map_crs.authid() != "EPSG:4326":
+                transformer = QgsCoordinateTransform(QgsCoordinateReferenceSystem("EPSG:4326"), map_crs,
+                                                     QgsProject.instance())
+                gps_point_map = transformer.transform(gps_point)
 
-        # screen_height = math.sqrt(math.pow((map_extent.xMaximum() - map_extent.xMinimum()),2) + math.pow((map_extent.yMaximum() - map_extent.yMinimum()), 2))
-        x_centroid = gps_point_dest.x() #+ offset_x
-        y_centroid = gps_point_dest.y() + offset_y
+            # Screen-relative offset: 30% down (i.e. shift center up)
+            canvas_height = self.canvas.height()
+            extent = self.canvas.extent()
+            extent_height = extent.height()
 
+            # Calculate how many map units = 30% of screen height
+            units_per_pixel_y = extent_height / canvas_height
+            offset_in_map_units = units_per_pixel_y * canvas_height * 0.3
 
-        QgsApplication.messageLog().logMessage(f"\nextent_width: {extent_width} extent_height: {extent_height} extent_diagonal: {extent_diagonal}\n"
-                                               f"GPS: ({gps_point.x()}, {gps_point.y()})\n"
-                                               f"GPS Dest: ({gps_point_dest.x()}, {gps_point_dest.y()})\n"
-                                               f"Offset: ({offset_x}, {offset_y})\n"
-                                               f"New Center: ({x_centroid}, {y_centroid})\n"
-                                               f"Bearing: {bearing:.2f}°  Rad: {bearing_r:.2f}", "DigitalSketchPlugin")
+            # Adjust for map rotation
+            bearing_r = math.radians(rotation%360)
+            offset_x = -math.sin(bearing_r) * offset_in_map_units
+            offset_y = math.cos(bearing_r) * offset_in_map_units
 
-        new_centre_dest = QgsPointXY(x_centroid, y_centroid)
-        new_centre_src = normal_retransformer.transform(new_centre_dest)
-        self.iface.mapCanvas().setCenter(gps_point)
-        self.iface.mapCanvas().setRotation(bearing)
-        self.iface.mapCanvas().refresh()
+            # New center is GPS + offset upward (so GPS appears lower on screen)
+            new_center = QgsPointXY(gps_point_map.x() + offset_x, gps_point_map.y() + offset_y)
+
+            # Set new center and refresh
+            self.canvas.setCenter(new_center)
+            self.canvas.refresh()
+
+            # Log for debugging
+            QgsApplication.messageLog().logMessage(
+                f"GPS (WGS84): ({position.x():.6f}, {position.y():.6f})\n"
+                f"GPS (Map CRS): ({gps_point_map.x():.6f}, {gps_point_map.y():.6f})\n"
+                f"Canvas H: {canvas_height} Extent H: {extent_height} units_per_pixel_y: {units_per_pixel_y} offset_in_map_units: {offset_in_map_units}"
+                f"Offset (map units): ({offset_x:.6f}, {offset_y:.6f})\n"
+                f"New center: ({new_center.x():.6f}, {new_center.y():.6f})\n",
+                "DigitalSketchPlugin"
+            )
 
     # --------------------------------------------------------------------------
 
@@ -464,7 +471,7 @@ class DigitalSketchMappingTool:
             if self.attributes['add_bing_imagery']:
                 self.load_bing_maps()
             self.create_geopackage_file(self.attributes['project_name'])
-            # self.zoom_to_location()
+            self.zoom_to_location()
 
     # --------------------------------------------------------------------------
 
@@ -499,14 +506,13 @@ class DigitalSketchMappingTool:
         #
         # # Convert location coordinates to Web Mercator
         # location_point = QgsPointXY(self.location_lon, self.location_lat)
-        # crs_src = QgsCoordinateReferenceSystem('EPSG:4326')
-        # crs_dest = QgsCoordinateReferenceSystem('EPSG:3857')
-        # xform = QgsCoordinateTransform(crs_src, crs_dest, QgsProject.instance())
-        # location_transformed = xform.transform(location_point)
         #
         # # Create an extent centered on location
-        # zoom_width = 20000  # meters
         location_point = QgsPointXY(151.2093, -33.8688)
+        crs_src = QgsCoordinateReferenceSystem('EPSG:4326')
+        crs_dest = QgsCoordinateReferenceSystem('EPSG:3857')
+        xform = QgsCoordinateTransform(crs_src, crs_dest, QgsProject.instance())
+        location_transformed = xform.transform(location_point)
 
         zoom_width = 0.2  # degrees
         extent = QgsRectangle(
