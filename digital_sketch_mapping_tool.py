@@ -354,7 +354,7 @@ class DigitalSketchMappingTool:
             map_settings = self.canvas.mapSettings()
             map_crs = map_settings.destinationCrs()
 
-            rotation = (-bearing_val+360)
+            rotation = (360 - bearing_val) % 360
             self.canvas.setRotation(rotation)
             self.canvas.refresh()
 
@@ -376,7 +376,7 @@ class DigitalSketchMappingTool:
             offset_in_map_units = units_per_pixel_y * canvas_height * 0.3
 
             # Adjust for map rotation
-            bearing_r = math.radians(rotation%360)
+            bearing_r = math.radians(rotation)
             offset_x = -math.sin(bearing_r) * offset_in_map_units
             offset_y = math.cos(bearing_r) * offset_in_map_units
 
