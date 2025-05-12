@@ -1,4 +1,4 @@
-from qgis.core import QgsProject, QgsApplication, QgsMarkerSymbol
+from qgis.core import QgsProject, QgsApplication, QgsMarkerSymbol, Qgis
 from qgis.gui import QgsMapTool, QgsMapMouseEvent, QgsMapToolIdentify, QgsHighlight, QgsVertexMarker
 from PyQt5.QtCore import Qt
 from qgis.PyQt.QtGui import QColor
@@ -16,22 +16,34 @@ class FeatureIdentifyTool(QgsMapTool):
         QgsApplication.messageLog().logMessage("FeatureIdentifyTool triggered", "DigitalSketchPlugin")
         identify_tool = QgsMapToolIdentify(self.iface.mapCanvas())
         layers = QgsProject.instance().mapLayers().values()  # Get all layers
-        results = identify_tool.identify(event.x(), event.y(), layers, QgsMapToolIdentify.TopDownStopAtFirst)
+        results = identify_tool.identify(event.x(), event.y(), layers, QgsMapToolIdentify.TopDownAll)
 
         if not results:
             QgsApplication.messageLog().logMessage("No feature clicked", "DigitalSketchPlugin")
             self.remove_highlight()
             return
 
+        selected_result = None
         for result in results:
-            feature = result.mFeature  # First identified feature
-            layer = result.mLayer  # Corresponding layer
+            if self.tool.check_if_feature_from_sketch_layer(result.mLayer.id()):
+                selected_result = result
+                break
+            else:
+                continue
+
+        if selected_result:
+            feature = selected_result.mFeature  # First identified feature
+            layer = selected_result.mLayer
             fid = feature.id()
             code = feature.attribute("Code")
             self.remove_highlight()
             self.highlight_feature(layer, feature)
             self.tool.selected_attribute = dict(type=layer.name(), fid=fid, code=code)
             self.tool.update_selected_layer_style()
+        else:
+            self.remove_highlight()
+            self.iface.messageBar().pushMessage("Info", "Selected feature does not belong to sketch layers.",
+                                                level=Qgis.Warning, duration=5)
 
     def highlight_feature(self, layer, feature):
 

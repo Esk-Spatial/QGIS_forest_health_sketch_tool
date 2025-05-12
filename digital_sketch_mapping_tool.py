@@ -309,7 +309,7 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.settingPushButton.clicked.connect(self.open_settings)
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
         self.digital_sketch_widget.deletePushButton.clicked.connect(self.remove_feature)
-        self.digital_sketch_widget.centerAndRotatePushButton.clicked.connect(self.center_and_rotate_map)
+        # self.digital_sketch_widget.centerAndRotatePushButton.clicked.connect(self.center_and_rotate_map) TODO
 
         self.digital_sketch_widget.codeLineEdit.textEdited.connect(self.code_text_changed)
         self.digital_sketch_widget.codeLineEdit.editingFinished.connect(self.code_text_changed_finished)
@@ -369,6 +369,7 @@ class DigitalSketchMappingTool:
             # Screen-relative offset: 30% down (i.e. shift center up)
             canvas_height = self.canvas.height()
             extent = self.canvas.extent()
+            extent_width = extent.width()
             extent_height = extent.height()
 
             # Calculate how many map units = 30% of screen height
@@ -380,22 +381,47 @@ class DigitalSketchMappingTool:
             offset_x = -math.sin(bearing_r) * offset_in_map_units
             offset_y = math.cos(bearing_r) * offset_in_map_units
 
-            # New center is GPS + offset upward (so GPS appears lower on screen)
-            new_center = QgsPointXY(gps_point_map.x() + offset_x, gps_point_map.y() + offset_y)
 
-            # Set new center and refresh
-            self.canvas.setCenter(new_center)
+            offset_gps_point =  QgsPointXY(gps_point_map.x() , gps_point_map.y()) #- offset_in_map_units)
+            self.canvas.setExtent(QgsRectangle(offset_gps_point, offset_gps_point), True)
             self.canvas.refresh()
 
-            # Log for debugging
-            QgsApplication.messageLog().logMessage(
-                f"GPS (WGS84): ({position.x():.6f}, {position.y():.6f})\n"
-                f"GPS (Map CRS): ({gps_point_map.x():.6f}, {gps_point_map.y():.6f})\n"
-                f"Canvas H: {canvas_height} Extent H: {extent_height} units_per_pixel_y: {units_per_pixel_y} offset_in_map_units: {offset_in_map_units}"
-                f"Offset (map units): ({offset_x:.6f}, {offset_y:.6f})\n"
-                f"New center: ({new_center.x():.6f}, {new_center.y():.6f})\n",
-                "DigitalSketchPlugin"
-            )
+            # # New center is GPS + offset upward (so GPS appears lower on screen)
+            # new_center = QgsPointXY(gps_point_map.x() + offset_x, gps_point_map.y() + offset_y)
+            #
+            # half_width = extent_width / 2
+            # half_height = extent_height / 2
+            # new_extent = QgsRectangle(
+            #     new_center.x() - half_width,
+            #     new_center.y() - half_height,
+            #     new_center.x() + half_width,
+            #     new_center.y() + half_height
+            # )
+            #
+            # if not new_extent.contains(gps_point_map):
+            #     # Too close to edge — cancel or reduce offset
+            #     QgsApplication.messageLog().logMessage("Adjusted center would hide GPS point. Reducing offset.",
+            #                                            "DigitalSketchPlugin")
+            #
+            # # Set new center and refresh
+            # self.canvas.setCenter(new_center)
+            # self.canvas.refresh()
+            #
+            # # Log for debugging
+            # QgsApplication.messageLog().logMessage(
+            #     f"GPS (WGS84): ({position.x():.6f}, {position.y():.6f})\n"
+            #     f"GPS (Map CRS): ({gps_point_map.x():.6f}, {gps_point_map.y():.6f})\n"
+            #     f"Canvas H: {canvas_height} Extent H: {extent_height} units_per_pixel_y: {units_per_pixel_y} offset_in_map_units: {offset_in_map_units}"
+            #     f"Offset (map units): ({offset_x:.6f}, {offset_y:.6f})\n"
+            #     f"New center: ({new_center.x():.6f}, {new_center.y():.6f})\n",
+            #     "DigitalSketchPlugin"
+            # )
+            #
+            # center_after_set = self.canvas.center()
+            # extent_after_set = self.canvas.extent()
+            # QgsApplication.messageLog().logMessage(
+            #     f"Canvas Center After Set: {center_after_set}\n"
+            #     f"Canvas Extent: {extent_after_set.toString()}", "Debug")
 
     # --------------------------------------------------------------------------
 
@@ -865,11 +891,20 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def setup_feature_identify_tool(self):
+
+        if not self.sketch_layers_set:
+            self.iface.messageBar().pushMessage("Info", "Sketch Layers are not define!", level=Qgis.Warning, duration=5)
+            return
         self.save_layers()
         self.check_for_current_selection('select')
         self.digital_sketch_widget.selectPushButton.setChecked(True)
         self.reset_selection_digitize_tool()
         self.iface.mapCanvas().setMapTool(self.feature_identify_tool)
+
+    # --------------------------------------------------------------------------
+
+    def check_if_feature_from_sketch_layer(self, layer_id):
+        return layer_id in {self.point_layer.id(), self.polygon_layer.id(), self.line_layer.id()}
 
     # --------------------------------------------------------------------------
 
@@ -1033,23 +1068,17 @@ class DigitalSketchMappingTool:
 
     def update_selected_layer_style(self):
         layer_type = self.selected_attribute["type"]
-        layer_fid = self.selected_attribute["fid"]
 
         layer = None
         if "lines" in layer_type:
             layer = self.line_layer
         elif "points" in layer_type:
             layer = self.point_layer
-
         elif "polygons" in layer_type:
             layer = self.polygon_layer
 
         layer.startEditing()
         QgsApplication.messageLog().logMessage(f"layer.fields() {layer.fields()}", 'DigitalSketchPlugin')
-
-        # layer.dataProvider().changeAttributeValues({
-        #     layer_fid: {layer.fields().lookupField('style'): 'highlight'}
-        # })
 
     # --------------------------------------------------------------------------
 
