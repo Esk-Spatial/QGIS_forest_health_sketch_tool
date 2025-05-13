@@ -24,7 +24,7 @@
 import traceback
 from collections import deque
 
-from PyQt5.QtWidgets import QRadioButton, QStackedWidget
+from PyQt5.QtWidgets import QRadioButton, QStackedWidget, QCheckBox
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QVariant, QMargins
 from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWidgets import (QAction, QFileDialog, QMessageBox, QPushButton, QVBoxLayout, QFileDialog, QDialog,
@@ -157,6 +157,7 @@ class DigitalSketchMappingTool:
         self.sketch_layers_set = False
         self.layers_to_be_added = None
         self.gps_connection = None
+        self.rotate_on_gps_before_digitising = None
 
         self.iface.newProjectCreated.connect(self.on_new_project_created)
         self.iface.projectRead.connect(self.on_new_project_loaded)
@@ -309,7 +310,7 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.settingPushButton.clicked.connect(self.open_settings)
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
         self.digital_sketch_widget.deletePushButton.clicked.connect(self.remove_feature)
-        # self.digital_sketch_widget.centerAndRotatePushButton.clicked.connect(self.center_and_rotate_map) TODO
+        self.digital_sketch_widget.centerAndRotatePushButton.clicked.connect(self.center_and_rotate_map)
 
         self.digital_sketch_widget.codeLineEdit.textEdited.connect(self.code_text_changed)
         self.digital_sketch_widget.codeLineEdit.editingFinished.connect(self.code_text_changed_finished)
@@ -355,7 +356,7 @@ class DigitalSketchMappingTool:
             map_crs = map_settings.destinationCrs()
 
             rotation = (360 - bearing_val) % 360
-            self.canvas.setRotation(rotation)
+            # self.canvas.setRotation(rotation)
             self.canvas.refresh()
 
             # Get GPS point in map CRS
@@ -366,62 +367,15 @@ class DigitalSketchMappingTool:
                                                      QgsProject.instance())
                 gps_point_map = transformer.transform(gps_point)
 
-            # Screen-relative offset: 30% down (i.e. shift center up)
-            canvas_height = self.canvas.height()
             extent = self.canvas.extent()
-            extent_width = extent.width()
             extent_height = extent.height()
+            offset_distance = extent_height * 0.2
 
-            # Calculate how many map units = 30% of screen height
-            units_per_pixel_y = extent_height / canvas_height
-            offset_in_map_units = units_per_pixel_y * canvas_height * 0.3
-
-            # Adjust for map rotation
-            bearing_r = math.radians(rotation)
-            offset_x = -math.sin(bearing_r) * offset_in_map_units
-            offset_y = math.cos(bearing_r) * offset_in_map_units
-
-
-            offset_gps_point =  QgsPointXY(gps_point_map.x() , gps_point_map.y()) #- offset_in_map_units)
+            offset_gps_point =  QgsPointXY(gps_point_map.x() , gps_point_map.y())
             self.canvas.setExtent(QgsRectangle(offset_gps_point, offset_gps_point), True)
+            self.canvas.setCenter(QgsPointXY(gps_point_map.x() , gps_point_map.y()-offset_distance))
+            self.canvas.setRotation(rotation)
             self.canvas.refresh()
-
-            # # New center is GPS + offset upward (so GPS appears lower on screen)
-            # new_center = QgsPointXY(gps_point_map.x() + offset_x, gps_point_map.y() + offset_y)
-            #
-            # half_width = extent_width / 2
-            # half_height = extent_height / 2
-            # new_extent = QgsRectangle(
-            #     new_center.x() - half_width,
-            #     new_center.y() - half_height,
-            #     new_center.x() + half_width,
-            #     new_center.y() + half_height
-            # )
-            #
-            # if not new_extent.contains(gps_point_map):
-            #     # Too close to edge — cancel or reduce offset
-            #     QgsApplication.messageLog().logMessage("Adjusted center would hide GPS point. Reducing offset.",
-            #                                            "DigitalSketchPlugin")
-            #
-            # # Set new center and refresh
-            # self.canvas.setCenter(new_center)
-            # self.canvas.refresh()
-            #
-            # # Log for debugging
-            # QgsApplication.messageLog().logMessage(
-            #     f"GPS (WGS84): ({position.x():.6f}, {position.y():.6f})\n"
-            #     f"GPS (Map CRS): ({gps_point_map.x():.6f}, {gps_point_map.y():.6f})\n"
-            #     f"Canvas H: {canvas_height} Extent H: {extent_height} units_per_pixel_y: {units_per_pixel_y} offset_in_map_units: {offset_in_map_units}"
-            #     f"Offset (map units): ({offset_x:.6f}, {offset_y:.6f})\n"
-            #     f"New center: ({new_center.x():.6f}, {new_center.y():.6f})\n",
-            #     "DigitalSketchPlugin"
-            # )
-            #
-            # center_after_set = self.canvas.center()
-            # extent_after_set = self.canvas.extent()
-            # QgsApplication.messageLog().logMessage(
-            #     f"Canvas Center After Set: {center_after_set}\n"
-            #     f"Canvas Extent: {extent_after_set.toString()}", "Debug")
 
     # --------------------------------------------------------------------------
 
@@ -555,6 +509,10 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def populate_categories(self):
+        if self.feature_string != "":
+            self.clear_current_btn_selection()
+            self.update_code_line_edit("")
+
         items = self.keypad_manager.get_checked_category_items()
         attr_box = self.digital_sketch_widget.categoryAttrVerticalLayout
         delete_keypad_items(attr_box)
@@ -583,7 +541,7 @@ class DigitalSketchMappingTool:
         else:
             self.feature_string = f'{self.feature_string}{button_name}'
 
-        self.update_code_line_edit()
+        self.update_code_line_edit(self.feature_string)
 
     # --------------------------------------------------------------------------
 
@@ -595,20 +553,25 @@ class DigitalSketchMappingTool:
                                                 level=Qgis.Critical, duration=5)
             self.check_for_current_selection()
             return
+
+        if self.digitizing_tool is not None:
+            if self.digitizing_tool.features_to_save():
+                self.save_layers(False)
+            self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
+
         self.feature_identify_tool.remove_highlight()
         self.check_for_current_selection(layer_type)
         self.iface.setActiveLayer(layer)
-        if self.digitizing_tool is not None:
-            self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
 
-        if layer_type == 'lines':
-            self.setup_stream_digitizing(layer, self.multiline_tool)
+        tool_map = {
+            'lines': self.multiline_tool,
+            'points': self.point_tool,
+            'polygons': self.polygon_tool
+        }
 
-        elif layer_type == 'points':
-            self.setup_stream_digitizing(layer, self.point_tool)
-
-        elif layer_type == 'polygons':
-            self.setup_stream_digitizing(layer, self.polygon_tool)
+        tool = tool_map.get(layer_type)
+        if tool:
+            self.setup_stream_digitizing(layer, tool)
 
         # Connect to feature added signal
         layer.featureAdded.connect(lambda fid: self.process_layer_after_adding(fid, layer, layer_type))
@@ -621,35 +584,34 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def save_and_pan(self):
-        self.save_layers()
+        self.save_layers(True)
         self.remove_digitizing_tool()
         self.digital_sketch_widget.saveAndPanPushButton.setChecked(True)
         self.check_for_current_selection('save-and-pan')
 
     # --------------------------------------------------------------------------
 
-    def save_layers(self):
-        self.change_gps_settings(False)
-        self.check_for_current_selection()
+    def save_layers(self, show_message):
+        if self.digitizing_tool is not None and self.digitizing_tool.features_to_save():
+            self.done_digitizing()
 
-        QgsApplication.messageLog().logMessage("Save layers is called", 'DigitalSketchPlugin')
-        if self.point_layer.isEditable():
-            QgsApplication.messageLog().logMessage("Point layer is editable", 'DigitalSketchPlugin')
-            self.point_layer.commitChanges()  # Save the changes
-            self.iface.messageBar().pushMessage("Success", "Changes committed successfully to point layer!",
-                                                level=Qgis.Success)
+        if show_message:
+            self.change_gps_settings(False)
+            self.check_for_current_selection()
 
-        if self.line_layer.isEditable():
-            QgsApplication.messageLog().logMessage("Line layer is editable", 'DigitalSketchPlugin')
-            self.line_layer.commitChanges()  # Save the changes
-            self.iface.messageBar().pushMessage("Success", "Changes committed successfully to line layer!",
-                                                level=Qgis.Success)
+        layers = [
+            (self.point_layer, "Point"),
+            (self.line_layer, "Line"),
+            (self.polygon_layer, "Polygon")
+        ]
 
-        if self.polygon_layer.isEditable():
-            QgsApplication.messageLog().logMessage("Polygon layer is editable", 'DigitalSketchPlugin')
-            self.polygon_layer.commitChanges()  # Save the changes
-            self.iface.messageBar().pushMessage("Success", "Changes committed successfully to polygon layer!",
-                                                level=Qgis.Success)
+        for layer, name in layers:
+            if layer.isEditable():
+                QgsApplication.messageLog().logMessage(f"{name} layer is editable", 'DigitalSketchPlugin')
+                layer.commitChanges()  # Save the changes
+                if show_message:
+                    self.iface.messageBar().pushMessage("Success", f"Changes committed successfully to {name} layer!",
+                                                    level=Qgis.Success)
 
     # --------------------------------------------------------------------------
 
@@ -697,10 +659,14 @@ class DigitalSketchMappingTool:
 
         if popup_btn:
             btn_menu = popup_btn.menu()
-            # for act in btn_menu.actions():
-            #     default_w = act.defaultWidget()
-            #     QgsApplication.messageLog().logMessage(f"type:{default_w.__class__.__name__} {default_w.accessibleName()}",
-            #                                                                            'DigitalSketchPlugin')
+            for ch in popup_btn.menu().findChildren(QAction):
+                if ch.text() == 'Rotate Map to Match GPS Direction':
+                    if start_digitizing:
+                        self.rotate_on_gps_before_digitising = ch.isChecked()
+                        ch.setChecked(False)
+                    else:
+                        ch.setChecked(self.rotate_on_gps_before_digitising)
+
 
             for child in btn_menu.findChildren(QWidget):
                 if isinstance(child, QRadioButton):
@@ -708,7 +674,6 @@ class DigitalSketchMappingTool:
                         child.click()
                     elif not start_digitizing and child.text() == 'Recenter Map When Leaving Extent':
                         child.click()
-                    # QgsApplication.messageLog().logMessage(f" {child.text()} {start_digitizing}", 'DigitalSketchPlugin')
 
     # --------------------------------------------------------------------------
 
@@ -895,7 +860,7 @@ class DigitalSketchMappingTool:
         if not self.sketch_layers_set:
             self.iface.messageBar().pushMessage("Info", "Sketch Layers are not define!", level=Qgis.Warning, duration=5)
             return
-        self.save_layers()
+        self.save_layers(True)
         self.check_for_current_selection('select')
         self.digital_sketch_widget.selectPushButton.setChecked(True)
         self.reset_selection_digitize_tool()
@@ -933,7 +898,7 @@ class DigitalSketchMappingTool:
         if self.layers_saved == self.digitizing_tool.number_of_items_to_update:
             self.layers_saved = 0
             self.feature_string = ""
-            self.update_code_line_edit()
+            self.update_code_line_edit("")
 
     # --------------------------------------------------------------------------
 
@@ -1039,8 +1004,8 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def update_code_line_edit(self):
-        self.digital_sketch_widget.codeLineEdit.setText(self.feature_string)
+    def update_code_line_edit(self, value):
+        self.digital_sketch_widget.codeLineEdit.setText(value)
 
     # --------------------------------------------------------------------------
 

@@ -81,6 +81,7 @@ class MultiLineDigitizingTool(QgsMapTool):
 
         # Reset state
         self.multi_line_segments = []
+        self.layer.startEditing()
         self.rubber_band.reset(QgsWkbTypes.LineGeometry)
 
     def get_multiline_string(self):

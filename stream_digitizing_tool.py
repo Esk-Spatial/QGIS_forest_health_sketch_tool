@@ -106,7 +106,7 @@ class StreamDigitizingTool(QgsMapTool):
 
         self.pending_features = []
         self.layer.commitChanges()
-
+        self.layer.startEditing()
         self.rubber_band.reset(QgsWkbTypes.PolygonGeometry if self.layer_type == 'polygons' else QgsWkbTypes.PointGeometry)
 
     def remove_feature(self):
