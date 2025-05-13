@@ -3,7 +3,7 @@ from qgis.core import (QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry, QgsMult
                        QgsApplication)
 from PyQt5.QtCore import Qt
 
-from helper import update_feature_attributes, reproject_to_layer_crs
+from helper import update_feature_attributes, reproject_to_destination_crs
 
 
 class MultiLineDigitizingTool(QgsMapTool):
@@ -49,6 +49,11 @@ class MultiLineDigitizingTool(QgsMapTool):
 
         self.rubber_band.setToGeometry(QgsGeometry(multi_line), None)
 
+    def features_to_save(self):
+        """Checks if there are any lines to save"""
+        return len(self.multi_line_segments) > 0
+
+
     def save_feature(self, attributes):
         """Saves the drawn MultiLineString to the layer"""
         if not self.multi_line_segments:
@@ -60,7 +65,7 @@ class MultiLineDigitizingTool(QgsMapTool):
         multi_line = self.get_multiline_string()
 
         if canvas_crs != layer_crs:
-            multi_line = reproject_to_layer_crs(multi_line, canvas_crs, layer_crs)
+            multi_line = reproject_to_destination_crs(multi_line, canvas_crs, layer_crs)
 
         feature = QgsFeature(self.layer.fields())
         feature.setGeometry(QgsGeometry(multi_line))
@@ -76,6 +81,7 @@ class MultiLineDigitizingTool(QgsMapTool):
 
         # Reset state
         self.multi_line_segments = []
+        self.layer.startEditing()
         self.rubber_band.reset(QgsWkbTypes.LineGeometry)
 
     def get_multiline_string(self):

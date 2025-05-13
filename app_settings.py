@@ -47,6 +47,8 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         self.project_changed = False
         self.new_project = False
 
+        self.toggle_project_name_and_file_read_only_state(True) # setting the project name and folder location to read-only
+
         if attributes is not None:
             self.projectNameLineEdit.setText(attributes["project_name"])
             if attributes["project_name"] is not None and attributes["project_name"] != '':
@@ -288,6 +290,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
     def change_folder_ctrl_to_readonly(self, folder_location):
         if folder_location is not None and folder_location != '':
             self.folderQgsFileWidget.setReadOnly(True)
+            self.useExistingLayerCheckBox.setDisabled(True) # if the folder is set, then use existing checkbox is disabled
 
     def toggle_project_name_and_file_read_only_state(self, state):
         self.folderQgsFileWidget.setReadOnly(state)

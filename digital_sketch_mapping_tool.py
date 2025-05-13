@@ -24,7 +24,7 @@
 import traceback
 from collections import deque
 
-from PyQt5.QtWidgets import QRadioButton, QStackedWidget
+from PyQt5.QtWidgets import QRadioButton, QStackedWidget, QCheckBox
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QVariant, QMargins
 from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWidgets import (QAction, QFileDialog, QMessageBox, QPushButton, QVBoxLayout, QFileDialog, QDialog,
@@ -40,7 +40,8 @@ from helper import (create_geopackage_file, split_array_to_chunks, adjust_color,
                     get_existing_layers, get_bing_layer, get_existing_enabled_layers, get_default_button_height,
                     get_default_button_width, get_default_button_font, get_default_button_font_colour)
 from qgis.core import (QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer,
-                       QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis, QgsCoordinateReferenceSystem)
+                       QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis, QgsCoordinateReferenceSystem,
+                       QgsGeometry)
 from data.db_init import DbInit
 from select_existing_layer import SelectExistingLayerDialog
 from stream_digitizing_tool import StreamDigitizingTool
@@ -55,6 +56,7 @@ from .resources import *
 # Import the code for the DockWidget
 from .digital_sketch_mapping_tool_dockwidget import DigitalSketchMappingToolDockWidget
 import os.path
+import math
 
 try:
     from osgeo import ogr
@@ -154,6 +156,8 @@ class DigitalSketchMappingTool:
         self.new_project_removing_existing = False
         self.sketch_layers_set = False
         self.layers_to_be_added = None
+        self.gps_connection = None
+        self.rotate_on_gps_before_digitising = None
 
         self.iface.newProjectCreated.connect(self.on_new_project_created)
         self.iface.projectRead.connect(self.on_new_project_loaded)
@@ -306,6 +310,7 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.settingPushButton.clicked.connect(self.open_settings)
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
         self.digital_sketch_widget.deletePushButton.clicked.connect(self.remove_feature)
+        self.digital_sketch_widget.centerAndRotatePushButton.clicked.connect(self.center_and_rotate_map)
 
         self.digital_sketch_widget.codeLineEdit.textEdited.connect(self.code_text_changed)
         self.digital_sketch_widget.codeLineEdit.editingFinished.connect(self.code_text_changed_finished)
@@ -324,6 +329,53 @@ class DigitalSketchMappingTool:
     def widget_opened(self, visible):
         if visible and not self.sketch_layers_set:
             self.check_for_sketch_layers()
+
+    # --------------------------------------------------------------------------
+
+    def center_and_rotate_map(self):
+        QgsApplication.messageLog().logMessage(f"center and rotate called ********* \n\n", 'DigitalSketchPlugin')
+        connections = QgsApplication.gpsConnectionRegistry().connectionList()
+        if not connections or len(connections) == 0:
+            self.iface.messageBar().pushMessage("Info", "Check GPS Connection.", level=Qgis.Warning, duration=5)
+        else:
+            self.gps_connection = connections[0]
+            self.gps_connection.positionChanged.connect(self.recenter_if_outside_extent)
+
+    # --------------------------------------------------------------------------
+
+    def recenter_if_outside_extent(self, position):
+        """Recenter the map if the position is outside the extent"""
+        bearing_val = self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Bearing)
+        if bearing_val is not None:
+            try:
+                self.gps_connection.positionChanged.disconnect(self.recenter_if_outside_extent)
+            except Exception as e:
+                QgsApplication.messageLog().logMessage(f"error: {e}", "DigitalSketchPlugin")
+
+            map_settings = self.canvas.mapSettings()
+            map_crs = map_settings.destinationCrs()
+
+            rotation = (360 - bearing_val) % 360
+            # self.canvas.setRotation(rotation)
+            self.canvas.refresh()
+
+            # Get GPS point in map CRS
+            gps_point = QgsPointXY(position.x(), position.y())
+            gps_point_map = gps_point
+            if map_crs.authid() != "EPSG:4326":
+                transformer = QgsCoordinateTransform(QgsCoordinateReferenceSystem("EPSG:4326"), map_crs,
+                                                     QgsProject.instance())
+                gps_point_map = transformer.transform(gps_point)
+
+            extent = self.canvas.extent()
+            extent_height = extent.height()
+            offset_distance = extent_height * 0.2
+
+            offset_gps_point =  QgsPointXY(gps_point_map.x() , gps_point_map.y())
+            self.canvas.setExtent(QgsRectangle(offset_gps_point, offset_gps_point), True)
+            self.canvas.setCenter(QgsPointXY(gps_point_map.x() , gps_point_map.y()-offset_distance))
+            self.canvas.setRotation(rotation)
+            self.canvas.refresh()
 
     # --------------------------------------------------------------------------
 
@@ -358,7 +410,6 @@ class DigitalSketchMappingTool:
         self.use_existing = False
         if self.attributes is not None:
             self.attributes["project_changed"] = True
-
 
     # --------------------------------------------------------------------------
 
@@ -400,7 +451,7 @@ class DigitalSketchMappingTool:
             if self.attributes['add_bing_imagery']:
                 self.load_bing_maps()
             self.create_geopackage_file(self.attributes['project_name'])
-            # self.zoom_to_location()
+            self.zoom_to_location()
 
     # --------------------------------------------------------------------------
 
@@ -435,14 +486,13 @@ class DigitalSketchMappingTool:
         #
         # # Convert location coordinates to Web Mercator
         # location_point = QgsPointXY(self.location_lon, self.location_lat)
-        # crs_src = QgsCoordinateReferenceSystem('EPSG:4326')
-        # crs_dest = QgsCoordinateReferenceSystem('EPSG:3857')
-        # xform = QgsCoordinateTransform(crs_src, crs_dest, QgsProject.instance())
-        # location_transformed = xform.transform(location_point)
         #
         # # Create an extent centered on location
-        # zoom_width = 20000  # meters
         location_point = QgsPointXY(151.2093, -33.8688)
+        crs_src = QgsCoordinateReferenceSystem('EPSG:4326')
+        crs_dest = QgsCoordinateReferenceSystem('EPSG:3857')
+        xform = QgsCoordinateTransform(crs_src, crs_dest, QgsProject.instance())
+        location_transformed = xform.transform(location_point)
 
         zoom_width = 0.2  # degrees
         extent = QgsRectangle(
@@ -459,6 +509,10 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def populate_categories(self):
+        if self.feature_string != "":
+            self.clear_current_btn_selection()
+            self.update_code_line_edit("")
+
         items = self.keypad_manager.get_checked_category_items()
         attr_box = self.digital_sketch_widget.categoryAttrVerticalLayout
         delete_keypad_items(attr_box)
@@ -487,7 +541,7 @@ class DigitalSketchMappingTool:
         else:
             self.feature_string = f'{self.feature_string}{button_name}'
 
-        self.update_code_line_edit()
+        self.update_code_line_edit(self.feature_string)
 
     # --------------------------------------------------------------------------
 
@@ -499,20 +553,25 @@ class DigitalSketchMappingTool:
                                                 level=Qgis.Critical, duration=5)
             self.check_for_current_selection()
             return
+
+        if self.digitizing_tool is not None:
+            if self.digitizing_tool.features_to_save():
+                self.save_layers(False)
+            self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
+
         self.feature_identify_tool.remove_highlight()
         self.check_for_current_selection(layer_type)
         self.iface.setActiveLayer(layer)
-        if self.digitizing_tool is not None:
-            self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
 
-        if layer_type == 'lines':
-            self.setup_stream_digitizing(layer, self.multiline_tool)
+        tool_map = {
+            'lines': self.multiline_tool,
+            'points': self.point_tool,
+            'polygons': self.polygon_tool
+        }
 
-        elif layer_type == 'points':
-            self.setup_stream_digitizing(layer, self.point_tool)
-
-        elif layer_type == 'polygons':
-            self.setup_stream_digitizing(layer, self.polygon_tool)
+        tool = tool_map.get(layer_type)
+        if tool:
+            self.setup_stream_digitizing(layer, tool)
 
         # Connect to feature added signal
         layer.featureAdded.connect(lambda fid: self.process_layer_after_adding(fid, layer, layer_type))
@@ -525,35 +584,34 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def save_and_pan(self):
-        self.save_layers()
+        self.save_layers(True)
         self.remove_digitizing_tool()
         self.digital_sketch_widget.saveAndPanPushButton.setChecked(True)
         self.check_for_current_selection('save-and-pan')
 
     # --------------------------------------------------------------------------
 
-    def save_layers(self):
-        self.change_gps_settings(False)
-        self.check_for_current_selection()
+    def save_layers(self, show_message):
+        if self.digitizing_tool is not None and self.digitizing_tool.features_to_save():
+            self.done_digitizing()
 
-        QgsApplication.messageLog().logMessage("Save layers is called", 'DigitalSketchPlugin')
-        if self.point_layer.isEditable():
-            QgsApplication.messageLog().logMessage("Point layer is editable", 'DigitalSketchPlugin')
-            self.point_layer.commitChanges()  # Save the changes
-            self.iface.messageBar().pushMessage("Success", "Changes committed successfully to point layer!",
-                                                level=Qgis.Success)
+        if show_message:
+            self.change_gps_settings(False)
+            self.check_for_current_selection()
 
-        if self.line_layer.isEditable():
-            QgsApplication.messageLog().logMessage("Line layer is editable", 'DigitalSketchPlugin')
-            self.line_layer.commitChanges()  # Save the changes
-            self.iface.messageBar().pushMessage("Success", "Changes committed successfully to line layer!",
-                                                level=Qgis.Success)
+        layers = [
+            (self.point_layer, "Point"),
+            (self.line_layer, "Line"),
+            (self.polygon_layer, "Polygon")
+        ]
 
-        if self.polygon_layer.isEditable():
-            QgsApplication.messageLog().logMessage("Polygon layer is editable", 'DigitalSketchPlugin')
-            self.polygon_layer.commitChanges()  # Save the changes
-            self.iface.messageBar().pushMessage("Success", "Changes committed successfully to polygon layer!",
-                                                level=Qgis.Success)
+        for layer, name in layers:
+            if layer.isEditable():
+                QgsApplication.messageLog().logMessage(f"{name} layer is editable", 'DigitalSketchPlugin')
+                layer.commitChanges()  # Save the changes
+                if show_message:
+                    self.iface.messageBar().pushMessage("Success", f"Changes committed successfully to {name} layer!",
+                                                    level=Qgis.Success)
 
     # --------------------------------------------------------------------------
 
@@ -601,10 +659,14 @@ class DigitalSketchMappingTool:
 
         if popup_btn:
             btn_menu = popup_btn.menu()
-            # for act in btn_menu.actions():
-            #     default_w = act.defaultWidget()
-            #     QgsApplication.messageLog().logMessage(f"type:{default_w.__class__.__name__} {default_w.accessibleName()}",
-            #                                                                            'DigitalSketchPlugin')
+            for ch in popup_btn.menu().findChildren(QAction):
+                if ch.text() == 'Rotate Map to Match GPS Direction':
+                    if start_digitizing:
+                        self.rotate_on_gps_before_digitising = ch.isChecked()
+                        ch.setChecked(False)
+                    else:
+                        ch.setChecked(self.rotate_on_gps_before_digitising)
+
 
             for child in btn_menu.findChildren(QWidget):
                 if isinstance(child, QRadioButton):
@@ -612,7 +674,6 @@ class DigitalSketchMappingTool:
                         child.click()
                     elif not start_digitizing and child.text() == 'Recenter Map When Leaving Extent':
                         child.click()
-                    # QgsApplication.messageLog().logMessage(f" {child.text()} {start_digitizing}", 'DigitalSketchPlugin')
 
     # --------------------------------------------------------------------------
 
@@ -678,21 +739,27 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def done_digitizing(self):
-        if self.pressed_btn is None:
-            self.iface.messageBar().pushMessage("Error", "There is no feature(s) created to be added",
-                                                level=Qgis.Critical, duration=5)
+        if self.digitizing_tool is None:
+            self.iface.messageBar().pushMessage("Info", "The Digitizing tool is not active. Please use the polygon, point and line sketch buttons to create your sketch.",
+                                                level=Qgis.Info, duration=5)
             return
 
-        QgsApplication.messageLog().logMessage("Done Digitizing is called", 'DigitalSketchPlugin')
-        self.clear_current_btn_selection()
-        self.clicked_buttons.clear()
-        self.text_changed = False
-        code_attr = self.feature_string if not self.text_changed else self.get_code_txt()
-        surveyor = self.attributes['surveyor'] if self.attributes is not None else ""
-        type_txt = self.attributes['type_txt'] if self.attributes is not None else ""
-        attributes = dict(colour=self.selected_colour, code=code_attr, surveyor=surveyor,
-                          type_txt=type_txt)
-        self.digitizing_tool.save_feature(attributes)
+        elif not self.digitizing_tool.features_to_save():
+            self.iface.messageBar().pushMessage("Info", "There is no sketch to be stored.",
+                                                level=Qgis.Info, duration=5)
+            return
+
+        else:
+            QgsApplication.messageLog().logMessage("Done Digitizing is called", 'DigitalSketchPlugin')
+            self.clear_current_btn_selection()
+            self.clicked_buttons.clear()
+            self.text_changed = False
+            code_attr = self.feature_string if not self.text_changed else self.get_code_txt()
+            surveyor = self.attributes['surveyor'] if self.attributes is not None else ""
+            type_txt = self.attributes['type_txt'] if self.attributes is not None else ""
+            attributes = dict(colour=self.selected_colour, code=code_attr, surveyor=surveyor,
+                              type_txt=type_txt)
+            self.digitizing_tool.save_feature(attributes)
 
     # --------------------------------------------------------------------------
 
@@ -789,11 +856,20 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def setup_feature_identify_tool(self):
-        self.save_layers()
+
+        if not self.sketch_layers_set:
+            self.iface.messageBar().pushMessage("Info", "Sketch Layers are not define!", level=Qgis.Warning, duration=5)
+            return
+        self.save_layers(True)
         self.check_for_current_selection('select')
         self.digital_sketch_widget.selectPushButton.setChecked(True)
         self.reset_selection_digitize_tool()
         self.iface.mapCanvas().setMapTool(self.feature_identify_tool)
+
+    # --------------------------------------------------------------------------
+
+    def check_if_feature_from_sketch_layer(self, layer_id):
+        return layer_id in {self.point_layer.id(), self.polygon_layer.id(), self.line_layer.id()}
 
     # --------------------------------------------------------------------------
 
@@ -822,7 +898,7 @@ class DigitalSketchMappingTool:
         if self.layers_saved == self.digitizing_tool.number_of_items_to_update:
             self.layers_saved = 0
             self.feature_string = ""
-            self.update_code_line_edit()
+            self.update_code_line_edit("")
 
     # --------------------------------------------------------------------------
 
@@ -928,8 +1004,8 @@ class DigitalSketchMappingTool:
 
     # --------------------------------------------------------------------------
 
-    def update_code_line_edit(self):
-        self.digital_sketch_widget.codeLineEdit.setText(self.feature_string)
+    def update_code_line_edit(self, value):
+        self.digital_sketch_widget.codeLineEdit.setText(value)
 
     # --------------------------------------------------------------------------
 
@@ -957,23 +1033,17 @@ class DigitalSketchMappingTool:
 
     def update_selected_layer_style(self):
         layer_type = self.selected_attribute["type"]
-        layer_fid = self.selected_attribute["fid"]
 
         layer = None
         if "lines" in layer_type:
             layer = self.line_layer
         elif "points" in layer_type:
             layer = self.point_layer
-
         elif "polygons" in layer_type:
             layer = self.polygon_layer
 
         layer.startEditing()
         QgsApplication.messageLog().logMessage(f"layer.fields() {layer.fields()}", 'DigitalSketchPlugin')
-
-        # layer.dataProvider().changeAttributeValues({
-        #     layer_fid: {layer.fields().lookupField('style'): 'highlight'}
-        # })
 
     # --------------------------------------------------------------------------
 

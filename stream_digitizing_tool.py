@@ -4,7 +4,7 @@ from qgis.core import QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry, QgsAppli
 from PyQt5.QtCore import Qt
 from qgis.PyQt.QtGui import QColor
 
-from helper import update_feature_attributes, reproject_to_layer_crs
+from helper import update_feature_attributes, reproject_to_destination_crs
 
 
 class StreamDigitizingTool(QgsMapTool):
@@ -63,7 +63,7 @@ class StreamDigitizingTool(QgsMapTool):
         layer_crs = self.layer.crs()
 
         if canvas_crs != layer_crs:
-            geom = reproject_to_layer_crs(geom, canvas_crs, layer_crs)
+            geom = reproject_to_destination_crs(geom, canvas_crs, layer_crs)
 
         feature = QgsFeature(self.layer.fields())
         feature.setGeometry(geom)
@@ -78,11 +78,18 @@ class StreamDigitizingTool(QgsMapTool):
         layer_crs = self.layer.crs()
         geom = QgsGeometry.fromPointXY(point)
         if canvas_crs != layer_crs:
-            geom = reproject_to_layer_crs(geom, canvas_crs, layer_crs)
+            geom = reproject_to_destination_crs(geom, canvas_crs, layer_crs)
 
         feature = QgsFeature(self.layer.fields())
         feature.setGeometry(geom)
         self.pending_features.append(feature)
+
+    def features_to_save(self):
+        """Checks if there are any features to save"""
+        if self.layer_type == 'points':
+            return len(self.pending_features) > 0
+        else:
+            return len(self.stream_points) > 0
 
     def save_feature(self, attributes):
         if self.layer_type != 'points':
@@ -99,7 +106,7 @@ class StreamDigitizingTool(QgsMapTool):
 
         self.pending_features = []
         self.layer.commitChanges()
-
+        self.layer.startEditing()
         self.rubber_band.reset(QgsWkbTypes.PolygonGeometry if self.layer_type == 'polygons' else QgsWkbTypes.PointGeometry)
 
     def remove_feature(self):
