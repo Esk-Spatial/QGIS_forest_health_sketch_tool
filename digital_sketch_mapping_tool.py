@@ -371,9 +371,9 @@ class DigitalSketchMappingTool:
 
         position_on_screen = self.canvas.getCoordinateTransform().transform(gps_point_map)
         canvas_height = self.canvas.height()
-        y_offset_in_px = canvas_height * 0.3
+        y_offset_in_px = int(canvas_height * 0.3)
         position_on_screen.setY(position_on_screen.y() - y_offset_in_px)
-        offset_center = self.canvas.getCoordinateTransform().toMapCoordinates(position_on_screen.x(), position_on_screen.y())
+        offset_center = self.canvas.getCoordinateTransform().toMapCoordinatesF(position_on_screen.x(), position_on_screen.y())
 
         self.canvas.setCenter(offset_center)
         self.canvas.refresh()
