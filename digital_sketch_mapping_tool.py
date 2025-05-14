@@ -346,36 +346,37 @@ class DigitalSketchMappingTool:
     def recenter_if_outside_extent(self, position):
         """Recenter the map if the position is outside the extent"""
         bearing_val = self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Bearing)
-        if bearing_val is not None:
-            try:
-                self.gps_connection.positionChanged.disconnect(self.recenter_if_outside_extent)
-            except Exception as e:
-                QgsApplication.messageLog().logMessage(f"error: {e}", "DigitalSketchPlugin")
 
-            map_settings = self.canvas.mapSettings()
-            map_crs = map_settings.destinationCrs()
+        if bearing_val is None:
+            return
 
-            rotation = (360 - bearing_val) % 360
-            # self.canvas.setRotation(rotation)
-            self.canvas.refresh()
+        try:
+            self.gps_connection.positionChanged.disconnect(self.recenter_if_outside_extent)
+        except Exception as e:
+            QgsApplication.messageLog().logMessage(f"error: {e}", "DigitalSketchPlugin")
 
-            # Get GPS point in map CRS
-            gps_point = QgsPointXY(position.x(), position.y())
-            gps_point_map = gps_point
-            if map_crs.authid() != "EPSG:4326":
-                transformer = QgsCoordinateTransform(QgsCoordinateReferenceSystem("EPSG:4326"), map_crs,
-                                                     QgsProject.instance())
-                gps_point_map = transformer.transform(gps_point)
+        map_settings = self.canvas.mapSettings()
+        map_crs = map_settings.destinationCrs()
 
-            extent = self.canvas.extent()
-            extent_height = extent.height()
-            offset_distance = extent_height * 0.2
+        rotation = (360 - bearing_val) % 360
+        self.canvas.setRotation(rotation)
 
-            offset_gps_point =  QgsPointXY(gps_point_map.x() , gps_point_map.y())
-            self.canvas.setExtent(QgsRectangle(offset_gps_point, offset_gps_point), True)
-            self.canvas.setCenter(QgsPointXY(gps_point_map.x() , gps_point_map.y()-offset_distance))
-            self.canvas.setRotation(rotation)
-            self.canvas.refresh()
+        # Get GPS point in map CRS
+        gps_point = QgsPointXY(position.x(), position.y())
+        gps_point_map = gps_point
+        if map_crs.authid() != "EPSG:4326":
+            transformer = QgsCoordinateTransform(QgsCoordinateReferenceSystem("EPSG:4326"), map_crs,
+                                                 QgsProject.instance())
+            gps_point_map = transformer.transform(gps_point)
+
+        position_on_screen = self.canvas.getCoordinateTransform().transform(gps_point_map)
+        canvas_height = self.canvas.height()
+        y_offset_in_px = canvas_height * 0.3
+        position_on_screen.setY(position_on_screen.y() - y_offset_in_px)
+        offset_center = self.canvas.getCoordinateTransform().toMapCoordinates(position_on_screen.x(), position_on_screen.y())
+
+        self.canvas.setCenter(offset_center)
+        self.canvas.refresh()
 
     # --------------------------------------------------------------------------
 
@@ -420,6 +421,8 @@ class DigitalSketchMappingTool:
             if layer_selection.exec_() == QDialog.Accepted:
                 self.set_layer_from_existing(layer_selection.get_layer_selection())
                 self.populate_categories()
+
+    # --------------------------------------------------------------------------
 
     def remove_layers(self):
         try:
@@ -482,12 +485,6 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def zoom_to_location(self):
-        # self.canvas.setDestinationCrs(QgsCoordinateReferenceSystem('EPSG:3857'))
-        #
-        # # Convert location coordinates to Web Mercator
-        # location_point = QgsPointXY(self.location_lon, self.location_lat)
-        #
-        # # Create an extent centered on location
         location_point = QgsPointXY(151.2093, -33.8688)
         crs_src = QgsCoordinateReferenceSystem('EPSG:4326')
         crs_dest = QgsCoordinateReferenceSystem('EPSG:3857')
@@ -536,8 +533,6 @@ class DigitalSketchMappingTool:
         if self.feature_string == "":
             self.feature_string = button_name
 
-        # elif button_name not in self.feature_string:
-        #     self.feature_string = f'{self.feature_string}{button_name}'
         else:
             self.feature_string = f'{self.feature_string}{button_name}'
 
@@ -657,23 +652,34 @@ class DigitalSketchMappingTool:
         gps = self.iface.mainWindow().findChild(QWidget, 'QgsGpsInformationWidgetBase')
         popup_btn = gps.findChild(QToolButton, "mBtnPopupOptions")
 
-        if popup_btn:
-            btn_menu = popup_btn.menu()
-            for ch in popup_btn.menu().findChildren(QAction):
-                if ch.text() == 'Rotate Map to Match GPS Direction':
-                    if start_digitizing:
-                        self.rotate_on_gps_before_digitising = ch.isChecked()
-                        ch.setChecked(False)
-                    else:
-                        ch.setChecked(self.rotate_on_gps_before_digitising)
+        if not popup_btn:
+            return
 
+        btn_menu = popup_btn.menu()
+        rotate_action = next(
+            (action for action in btn_menu.findChildren(QAction)
+             if action.text() == 'Rotate Map to Match GPS Direction'),
+            None
+        )
 
-            for child in btn_menu.findChildren(QWidget):
-                if isinstance(child, QRadioButton):
-                    if start_digitizing and child.text() == 'Never Recenter':
-                        child.click()
-                    elif not start_digitizing and child.text() == 'Recenter Map When Leaving Extent':
-                        child.click()
+        if rotate_action:
+            if start_digitizing:
+                self.rotate_on_gps_before_digitising = rotate_action.isChecked()
+                rotate_action.setChecked(False)
+            else:
+                flag = self.rotate_on_gps_before_digitising if self.rotate_on_gps_before_digitising is not None else True
+                rotate_action.setChecked(flag)
+
+        radio_buttons = {
+            True: 'Never Recenter',
+            False: 'Recenter Map When Leaving Extent'
+        }
+        target_btn = radio_buttons[start_digitizing]
+
+        for radio_btn in btn_menu.findChildren(QRadioButton):
+            if radio_btn.text() == target_btn:
+                radio_btn.click()
+
 
     # --------------------------------------------------------------------------
 
@@ -787,45 +793,45 @@ class DigitalSketchMappingTool:
         if self.digitizing_tool is not None:
             QgsApplication.messageLog().logMessage("still digitizing", 'DigitalSketchPlugin')
             self.digitizing_tool.remove_feature()
+            return
+
+        if self.selected_attribute is not None:
+            QgsApplication.messageLog().logMessage(f"{self.selected_attribute}", 'DigitalSketchPlugin')
+            layer_type = self.selected_attribute["type"]
+            layer_fid = self.selected_attribute["fid"]
+            layer_code = self.selected_attribute["code"]
+            if show_delete_confirmation(f'selected feature?\n(Layer: {layer_type} Code: {layer_code})') == QDialog.Accepted:
+                if self.selected_attribute in self.created_layers_stack:
+                    self.created_layers_stack.remove(self.selected_attribute)
+            else:
+                self.selected_attribute = None
+                self.feature_identify_tool.remove_highlight()
+                return
 
         else:
-            if self.selected_attribute is not None:
-                QgsApplication.messageLog().logMessage(f"{self.selected_attribute}", 'DigitalSketchPlugin')
-                layer_type = self.selected_attribute["type"]
-                layer_fid = self.selected_attribute["fid"]
-                layer_code = self.selected_attribute["code"]
-                if show_delete_confirmation(f'selected feature?\n(Layer: {layer_type} Code: {layer_code})') == QDialog.Accepted:
-                    if {"type": layer_type, "fid": layer_fid, "code": layer_code} in self.created_layers_stack:
-                        self.created_layers_stack.remove({"type": layer_type, "fid": layer_fid, "code": layer_code})
-                else:
-                    self.selected_attribute = None
-                    self.feature_identify_tool.remove_highlight()
-                    return
+            if len(self.created_layers_stack) == 0:
+                return
 
-            else:
-                if len(self.created_layers_stack) == 0:
-                    return
-
+            QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
+            last_index = len(self.created_layers_stack)-1
+            last_layer = self.created_layers_stack[last_index]
+            layer_type = last_layer["type"]
+            layer_fid = last_layer["fid"]
+            layer_code = last_layer["code"]
+            if show_delete_confirmation(f'most recent feature?\n(Layer: {layer_type} Code: {layer_code})') == QDialog.Accepted:
+                self.created_layers_stack.pop()
                 QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
-                last_index = len(self.created_layers_stack)-1
-                last_layer = self.created_layers_stack[last_index]
-                layer_type = last_layer["type"]
-                layer_fid = last_layer["fid"]
-                layer_code = last_layer["code"]
-                if show_delete_confirmation(f'most recent feature?\n(Layer: {layer_type} Code: {layer_code})') == QDialog.Accepted:
-                    self.created_layers_stack.pop()
-                    QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
-                else:
-                    return
+            else:
+                return
 
-            if "lines" in layer_type:
-                self.delete_feature(self.line_layer, layer_fid)
+        if "lines" in layer_type:
+            self.delete_feature(self.line_layer, layer_fid)
 
-            elif "points" in layer_type:
-                self.delete_feature(self.point_layer, layer_fid)
+        elif "points" in layer_type:
+            self.delete_feature(self.point_layer, layer_fid)
 
-            elif "polygons" in layer_type:
-                self.delete_feature(self.polygon_layer, layer_fid)
+        elif "polygons" in layer_type:
+            self.delete_feature(self.polygon_layer, layer_fid)
 
     # --------------------------------------------------------------------------
 

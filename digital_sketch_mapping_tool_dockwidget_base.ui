@@ -333,12 +333,12 @@
             </property>
             <property name="icon">
              <iconset>
-              <normaloff>icons/buttons/hand-pointer-duotone-thin.svg</normaloff>icons/buttons/hand-pointer-duotone-thin.svg</iconset>
+              <normaloff>icons/buttons/arrow-trash-duotone-thin.svg</normaloff>icons/buttons/arrow-trash-duotone-thin.svg</iconset>
             </property>
             <property name="iconSize">
              <size>
-              <width>30</width>
-              <height>30</height>
+              <width>35</width>
+              <height>35</height>
              </size>
             </property>
             <property name="checkable">
@@ -369,7 +369,7 @@
             <x>0</x>
             <y>0</y>
             <width>405</width>
-            <height>555</height>
+            <height>556</height>
            </rect>
           </property>
           <property name="minimumSize">
