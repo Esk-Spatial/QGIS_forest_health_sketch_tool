@@ -1,7 +1,7 @@
 
 from PyQt5.QtGui import QColor
-from qgis.PyQt.QtWidgets import (QDialog, QCheckBox, QVBoxLayout, QScrollArea, QWidget, QListWidgetItem, QHBoxLayout,
-                                 QLabel, QPushButton, QSpacerItem, QSizePolicy, QDialogButtonBox)
+from qgis.PyQt.QtWidgets import (QDialog, QCheckBox, QWidget, QListWidgetItem, QHBoxLayout,
+                                 QLabel, QPushButton, QSpacerItem, QSizePolicy)
 from qgis.PyQt import uic
 from qgis.core import QgsApplication
 import os

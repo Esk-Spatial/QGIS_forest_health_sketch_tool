@@ -1,7 +1,6 @@
 
 from qgis.PyQt.QtWidgets import QDialog
 from qgis.PyQt import uic
-from qgis.core import QgsApplication
 import os
 
 # Load the UI file dynamically
@@ -9,6 +8,13 @@ FORM_CLASS, _ = uic.loadUiType(os.path.join(os.path.dirname(__file__), "delete_c
 
 class DeleteConfirmationDialog(QDialog, FORM_CLASS):
     def __init__(self, text, parent=None):
+        """Constructor for the DeleteConfirmationDialog.
+
+        :param text: The text to display in the confirmation dialog.
+        :type text: str
+        :param parent: The parent widget for the confirmation dialog.
+        :type parent: QWidget, optional
+        """
         super(DeleteConfirmationDialog, self).__init__(parent)
         self.setupUi(self)
 

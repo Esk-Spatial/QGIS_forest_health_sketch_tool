@@ -329,6 +329,7 @@ class DigitalSketchMappingTool:
         """function checks if the dock-widget is visible and layers are not set then check if there are layers loaded.
 
         :param visible: boolean value of the widget visibility
+        :type visible: bool
         """
         if visible and not self.sketch_layers_set:
             self.check_for_sketch_layers()
@@ -353,6 +354,7 @@ class DigitalSketchMappingTool:
         convert the position to device space coordinate to set the buffer
 
         :param position current position emitted by the GPS
+        :type position: QgsPoint
         """
         bearing_val = self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Bearing)
 
@@ -482,6 +484,7 @@ class DigitalSketchMappingTool:
         """Sets the sketch layers from existing layers in the project
 
         :param layers: Dictionary containing the layers from the existing project
+        :type layers: dict
         """
         self.use_existing =True
         self.sketch_layers_set = True
@@ -540,8 +543,10 @@ class DigitalSketchMappingTool:
         """Handle the button click of keypad elements.
 
         :param button_name: Name of the button
+        :type button_name: str
 
         :param :btn: clicked button
+        :type btn: QButton
         """
         if self.text_changed:
             btn.setChecked(False)
@@ -559,11 +564,13 @@ class DigitalSketchMappingTool:
 
     def setup_digitizing(self, layer, layer_type):
         """Setup digitizing mode with automated attribute handling
-        Check if layers are defined and if not show a critical error message on the Error message bar.
+        Check if layers are defined and if not, show a critical error message on the Error message bar.
 
         :param layer: Layer to be used for digitizing
+        :type layer: QgsVectorLayer
 
         :param layer_type: Type of layer to be used for digitizing i.e. polygons, lines, points
+        :type layer_type: str
         """
 
         if layer is None:
@@ -600,6 +607,7 @@ class DigitalSketchMappingTool:
         """Perform zoom to map
 
         :param is_zoom_in: Boolean to indicate if it is Zoom in or Zoom out
+        :type is_zoom_in: bool
         """
         self.zoom_tool.zoom_map(is_zoom_in)
 
@@ -618,6 +626,7 @@ class DigitalSketchMappingTool:
         If so, save those features first.
 
         :param show_message: Boolean to indicate a message should be shown on the Message bar or nor/
+        :type show_message: bool
         """
         if self.digitizing_tool is not None and self.digitizing_tool.features_to_save():
             self.done_digitizing()
@@ -643,10 +652,10 @@ class DigitalSketchMappingTool:
 
     def layer_removed(self, layer_id):
         """This function is called when a layer is removed.
+        If a sketch layer is removed, then the corresponding layer placeholder is set to None ans an error message is shown.
 
         :param layer_id: ID of the layer removed
-
-        If a sketch layer is removed, then the corresponding layer placeholder is set to None ans an error message is shown.
+        :type layer_id: int
         """
         if not self.sketch_layers_set or 'sketch_' not in layer_id:
             return
@@ -670,6 +679,7 @@ class DigitalSketchMappingTool:
         """Show an error message on the Message bar with a button to open the settings window.
 
         :param message: Message to show
+        :type message: str
         """
         msg = self.iface.messageBar().createMessage(f"Error: {message}")
         btn = QPushButton("Please define your sketch layers or create new ones")
@@ -684,9 +694,10 @@ class DigitalSketchMappingTool:
 
 
     def redefine_layers(self, message):
-        """On the error message button click open the settings window to either redefine sketch layers or create new project.
+        """On the error message button click open the settings window to either redefine sketch layers or create a new project.
 
         :param message: Message instance to dismiss
+        :type message: QMessageBar
         """
         message.dismiss()
         if self.attributes is not None:
@@ -696,9 +707,10 @@ class DigitalSketchMappingTool:
 
     def change_gps_settings(self, start_digitizing):
         """Change the GPS settings based on if it's digitizing or not.
-        If it is digitizing, then auto rotation and centering is disabled.
+        If it is digitizing, then autorotation and centering are disabled.
 
         :param start_digitizing: Boolean to indicate if it is digitizing or not
+        :type start_digitizing: bool
         """
         gps = self.iface.mainWindow().findChild(QWidget, 'QgsGpsInformationWidgetBase')
         popup_btn = gps.findChild(QToolButton, "mBtnPopupOptions")
@@ -736,6 +748,7 @@ class DigitalSketchMappingTool:
         """Open the settings window.
 
         :param disable_existing: Boolean to indicate if it is to disable existing layers checkbox
+        :type disable_existing: bool
         """
         settings_dialog = AppSettingsDialog(self.keypad_manager, self.attributes, disable_existing)
         if settings_dialog.exec_() == QDialog.Accepted:
@@ -862,9 +875,11 @@ class DigitalSketchMappingTool:
 
     def delete_feature(self, layer, fid):
         """Deletes a feature from a layer.
-        :param layer: Layer to delete the feature from
+        :param layer: Layer to delete the feature from.
+        :type layer: QgsVectorLayer
 
-        :param fid: Id of the feature to delete
+        :param fid: ID of the feature to delete
+        :type fid: int
         """
         self.feature_identify_tool.remove_highlight()
         layer.startEditing()
@@ -878,8 +893,10 @@ class DigitalSketchMappingTool:
         Change the GPS settings in preparation for enabling digitizing.
 
         :param layer: Layer to set up digitizing mode
+        :type layer: QgsVectorLayer
 
         :param tool: Type of the digitizing tool
+        :type tool: MultiLineDigitizingTool or StreamDigitizingTool
         """
         self.change_gps_settings(True)
         self.iface.mapCanvas().refresh()
@@ -914,6 +931,7 @@ class DigitalSketchMappingTool:
         """Check if the layer id opf the selected feature is from the sketch layer.
 
         :param layer_id: ID of the layer
+        :type layer_id: int
 
         :return: Boolean to indicate if the feature is from the sketch layer
         """
@@ -933,10 +951,13 @@ class DigitalSketchMappingTool:
         """Process the layer after adding a new feature
 
         :param fid: ID of the added feature
+        :type fid: int
 
         :param layer: Layer of the added feature
+        :type layer: QgsVectorLayer
 
         :param: layer_type: type of the layer i.e. line, polygon or point.
+        :type layer_type: str
         """
         feature = layer.getFeature(fid)
         code = feature.attribute("Code")
@@ -959,6 +980,7 @@ class DigitalSketchMappingTool:
         """Create a geopackage file with the given project name.
 
         :param project_name: Name of the project
+        :type project_name: str
         """
         QgsApplication.messageLog().logMessage('creating new gpkg file', 'DigitalSketchPlugin')
         date_time_str = datetime.now().strftime("%d-%m-%Y_%I-%M-%p")
@@ -989,6 +1011,7 @@ class DigitalSketchMappingTool:
 
         :param selection: If the selection is not None, the pressed_btn will be set.
                             Else all the buttons set checked will be set to false
+        :type selection: str
         """
         if self.pressed_btn is not None:
             if self.pressed_btn == 'lines':
@@ -1017,7 +1040,13 @@ class DigitalSketchMappingTool:
     def populate_buttons_from_list(self, items):
         """Populate the keypad buttons from the list.
         Set the button's style using the attributes defined in the settings window or using the default style
-        Setting up the clicked signal."""
+        Setting up the clicked signal.
+
+        :param items: List of items
+        :type items: list
+
+        :return: QWidget
+        """
         margin = QMargins(1,1,1,1)
         layout = QHBoxLayout()
         layout.setContentsMargins(margin)
@@ -1067,6 +1096,7 @@ class DigitalSketchMappingTool:
         """Update the code line edit with the given value.
 
         :param value: Value to be used for the code
+        :type value: str
         """
         self.digital_sketch_widget.codeLineEdit.setText(value)
 

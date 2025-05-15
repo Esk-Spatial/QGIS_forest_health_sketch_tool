@@ -21,8 +21,12 @@ def create_geopackage_file(path, crs=None):
     """Create a new GeoPackage file with the given path and CRS
 
     :param path: Path to save the GeoPackage file to.
+    :type path: str or pathlib.Path
 
     :param crs: CRS to use for the GeoPackage file. Defaults to EPSG:4326.
+    :type crs: str, optional
+
+    :return: True if the GeoPackage file was created successfully, False otherwise.
     """
     driver = ogr.GetDriverByName("GPKG")
     if driver is None:
@@ -53,6 +57,7 @@ def setup_layer_attr(layer):
     """Setup layer attributes for the given layer
 
     :param layer: Layer to setup attributes for.
+    :type layer: ogr.Layer
     """
     layer.CreateField(ogr.FieldDefn("colour", ogr.OFTString))
     layer.CreateField(ogr.FieldDefn("Shape", ogr.OFTString))
@@ -65,9 +70,12 @@ def setup_layer_attr(layer):
     layer.CreateField(ogr.FieldDefn("Time", ogr.OFTString))
 
 def get_closest_color_name(color):
-    """Find the closest color name from predefined QColor name
+    """Find the closest color name from the predefined QColor name
 
-    :param color: QColor object to find closest color name for.
+    :param color: QColor object to find the closest color name for.
+    :type color: QColor
+
+    :return: Closest color name as a string. If no match is found, return the hex value of the color.
     """
     min_distance = float('inf')
     closest_color_name = None
@@ -89,8 +97,10 @@ def split_array_to_chunks(items_list, chunk_size=2):
     """Split a list into chunks of a given size
 
     :param items_list: List to split into chunks.
+    :type items_list: list
 
     :param chunk_size: Size of each chunk. Defaults to 2.
+    :type chunk_size: int, optional
 
     :return: List of chunks.
     """
@@ -104,8 +114,10 @@ def adjust_color(hex_color, percent=30):
     Negative `percent` darkens the color.
 
     :param hex_color: Hex color string to adjust.
+    :type hex_color: str
 
     :param percent: Percentage to adjust the color by. Defaults to 30.
+    :type percent: int, optional
 
     :return: Adjusted color string.
     """

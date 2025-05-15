@@ -1,5 +1,5 @@
 
-from qgis.PyQt.QtWidgets import QDialog, QDialogButtonBox
+from qgis.PyQt.QtWidgets import QDialog
 from qgis.PyQt import uic
 from qgis.core import QgsApplication
 import os
