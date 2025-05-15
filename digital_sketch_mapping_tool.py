@@ -21,7 +21,6 @@
  *                                                                         *
  ***************************************************************************/
 """
-import traceback
 from collections import deque
 
 from PyQt5.QtWidgets import QRadioButton, QStackedWidget, QCheckBox
@@ -39,9 +38,11 @@ from custom_zoom_tool import CustomZoomTool
 from helper import (create_geopackage_file, split_array_to_chunks, adjust_color, show_delete_confirmation,
                     get_existing_layers, get_bing_layer, get_existing_enabled_layers, get_default_button_height,
                     get_default_button_width, get_default_button_font, get_default_button_font_colour)
+
 from qgis.core import (QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer,
                        QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis, QgsCoordinateReferenceSystem,
                        QgsGeometry)
+
 from data.db_init import DbInit
 from select_existing_layer import SelectExistingLayerDialog
 from stream_digitizing_tool import StreamDigitizingTool
@@ -56,7 +57,6 @@ from .resources import *
 # Import the code for the DockWidget
 from .digital_sketch_mapping_tool_dockwidget import DigitalSketchMappingToolDockWidget
 import os.path
-import math
 
 try:
     from osgeo import ogr
@@ -113,9 +113,9 @@ class DigitalSketchMappingTool:
         # initialize plugin directory
         self.plugin_dir = os.path.dirname(__file__)
 
+        # defining and initialising global variables/placeholders for the application
         self.iface = iface
         self.actions = []
-
         self.created_layers_stack = deque()
         self.digitizing_tool = None
         self.canvas = self.iface.mapCanvas()
@@ -162,7 +162,7 @@ class DigitalSketchMappingTool:
         self.iface.newProjectCreated.connect(self.on_new_project_created)
         self.iface.projectRead.connect(self.on_new_project_loaded)
 
-        # initialize locale
+        # initialize locale variables
         locale_value = QSettings().value('locale/userLocale')
         locale = locale_value[0:2] if locale_value else 'en'
         locale_path = os.path.join(
@@ -180,8 +180,6 @@ class DigitalSketchMappingTool:
         self.menu = self.tr(u'&Digital Sketch Mapping Tool')
         self.toolbar = self.iface.addToolBar(u'DigitalSketchMappingTool')
         self.toolbar.setObjectName(u'DigitalSketchMappingTool')
-
-        #print "** INITIALIZING DigitalSketchMappingTool"
 
         self.pluginIsActive = False
         self.digital_sketch_widget = DigitalSketchMappingToolDockWidget()
@@ -302,6 +300,11 @@ class DigitalSketchMappingTool:
         self.actions.append(action)
         self.toolbar.addAction(action)
 
+        """Setting up the listeners/signals for the main docked widget:
+                Button click listeners
+                Code Line text changed manually
+                Layer removed from the project
+        """
         self.digital_sketch_widget.zoomInPushButton.clicked.connect(lambda: self.zoom_to_map(True))
         self.digital_sketch_widget.zoomOutPushButton.clicked.connect(lambda: self.zoom_to_map(False))
 
@@ -324,25 +327,28 @@ class DigitalSketchMappingTool:
 
         QgsProject.instance().layerRemoved.connect(self.layer_removed)
 
-    # --------------------------------------------------------------------------
-
+    # function checks if the dock-widget is visible and layers are not set then check if there are layers loaded
     def widget_opened(self, visible):
         if visible and not self.sketch_layers_set:
             self.check_for_sketch_layers()
 
-    # --------------------------------------------------------------------------
-
+    """When Rotate and Center button is clicked this function will be triggered.
+       Checks for GPS connections, If there is a connection then it would listen to the position changed signal.
+    """
     def center_and_rotate_map(self):
         QgsApplication.messageLog().logMessage(f"center and rotate called ********* \n\n", 'DigitalSketchPlugin')
         connections = QgsApplication.gpsConnectionRegistry().connectionList()
         if not connections or len(connections) == 0:
             self.iface.messageBar().pushMessage("Info", "Check GPS Connection.", level=Qgis.Warning, duration=5)
-        else:
-            self.gps_connection = connections[0]
-            self.gps_connection.positionChanged.connect(self.recenter_if_outside_extent)
+            return
 
-    # --------------------------------------------------------------------------
+        self.gps_connection = connections[0]
+        self.gps_connection.positionChanged.connect(self.recenter_if_outside_extent)
 
+    """Gets the current bearing from the connections and if the bearing value is not null:
+        get the bearing and set it by convert it to mathematical rotation
+        convert the position to device space coordinate to set the buffer
+    """
     def recenter_if_outside_extent(self, position):
         """Recenter the map if the position is outside the extent"""
         bearing_val = self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Bearing)
@@ -358,6 +364,7 @@ class DigitalSketchMappingTool:
         map_settings = self.canvas.mapSettings()
         map_crs = map_settings.destinationCrs()
 
+        # get the positive value for the rotation
         rotation = (360 - bearing_val) % 360
         self.canvas.setRotation(rotation)
 
@@ -369,6 +376,11 @@ class DigitalSketchMappingTool:
                                                  QgsProject.instance())
             gps_point_map = transformer.transform(gps_point)
 
+        """Getting the position of the GPS in respective of the device coordinates.
+            setting the offset using the canvas height
+            updating the vertical position of the screen coordinates
+            getting the world coordinates from the screen coordinates
+        """
         position_on_screen = self.canvas.getCoordinateTransform().transform(gps_point_map)
         canvas_height = self.canvas.height()
         y_offset_in_px = int(canvas_height * 0.3)
@@ -378,42 +390,41 @@ class DigitalSketchMappingTool:
         self.canvas.setCenter(offset_center)
         self.canvas.refresh()
 
-    # --------------------------------------------------------------------------
-
+    # check if the SQLite database exists if not create the database
     def init_database_if_not_exists(self):
-        if not os.path.exists(self.db_path):
-            db_init_path = os.path.join(self.plugin_dir, 'data', 'db_init.py')
-            if os.path.exists(db_init_path):
-                self.db_initializer.init_db()
+        if os.path.exists(self.db_path):
+            return
 
-            else:
-                raise FileNotFoundError("data/db_init.py not found to initialize the database.")
+        db_init_path = os.path.join(self.plugin_dir, 'data', 'db_init.py')
+        if os.path.exists(db_init_path):
+            self.db_initializer.init_db()
 
-    # --------------------------------------------------------------------------
+        else:
+            raise FileNotFoundError("data/db_init.py not found to initialize the database.")
 
+    """When a new project is created then re-set the attributes.
+        If there a messages on the message bar clear those
+    """
     def on_new_project_created(self):
         self.project_created_or_loaded()
         if len(self.iface.messageBar().items()) > 0:
             for item in self.iface.messageBar().items():
                 self.iface.messageBar().popWidget(item)
-    # --------------------------------------------------------------------------
 
+    # When a new project is loaded then re-set the attributes and if the plugin is active check for existing sketch layers
     def on_new_project_loaded(self):
         self.project_created_or_loaded()
         if self.pluginIsActive:
             self.check_for_sketch_layers()
 
-    # --------------------------------------------------------------------------
-
+    # When a new project is created/loaded then some of the existing attributes are resetted
     def project_created_or_loaded(self):
-        QgsApplication.messageLog().logMessage('project created/loaded', 'DigitalSketchPlugin')
         self.folder_location_set = False
         self.use_existing = False
         if self.attributes is not None:
             self.attributes["project_changed"] = True
 
-    # --------------------------------------------------------------------------
-
+    # Check for existing layer if there are then show the layer selection model
     def check_for_sketch_layers(self):
         layer_groups = get_existing_enabled_layers()
         if len(layer_groups['points']) > 0 and len(layer_groups['polygons']) > 0 and len(layer_groups['lines']) > 0:
@@ -485,18 +496,10 @@ class DigitalSketchMappingTool:
     # --------------------------------------------------------------------------
 
     def zoom_to_location(self):
-        location_point = QgsPointXY(151.2093, -33.8688)
-        crs_src = QgsCoordinateReferenceSystem('EPSG:4326')
-        crs_dest = QgsCoordinateReferenceSystem('EPSG:3857')
-        xform = QgsCoordinateTransform(crs_src, crs_dest, QgsProject.instance())
-        location_transformed = xform.transform(location_point)
-
-        zoom_width = 0.2  # degrees
+        location_point = QgsPointXY(133.7751, -25.2744)
+        zoom_width = 5.2  # degrees
         extent = QgsRectangle(
-            location_point.x() - zoom_width,
-            location_point.y() - zoom_width,
-            location_point.x() + zoom_width,
-            location_point.y() + zoom_width
+            112.0, -44.0, 154.0, -10.0
         )
 
         # Set the extent and refresh
