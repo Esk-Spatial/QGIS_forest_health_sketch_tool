@@ -85,7 +85,10 @@ class StreamDigitizingTool(QgsMapTool):
         self.pending_features.append(feature)
 
     def features_to_save(self):
-        """Checks if there are any features to save"""
+        """Checks if there are any features to save.
+
+        :return: True if there are features to save, False otherwise.
+        """
         if self.layer_type == 'points':
             return len(self.pending_features) > 0
         else:
@@ -105,6 +108,7 @@ class StreamDigitizingTool(QgsMapTool):
             self.layer.addFeature(update_feature_attributes(feature, self.layer_type, attributes))
 
         self.pending_features = []
+        self.stream_points = []
         self.layer.commitChanges()
         self.layer.startEditing()
         self.rubber_band.reset(QgsWkbTypes.PolygonGeometry if self.layer_type == 'polygons' else QgsWkbTypes.PointGeometry)
