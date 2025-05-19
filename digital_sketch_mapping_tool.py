@@ -24,7 +24,7 @@
 from collections import deque
 
 from PyQt5.QtWidgets import QRadioButton
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QMargins
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QMargins, QTimer
 from qgis.PyQt.QtGui import QIcon, QColor
 from qgis.PyQt.QtWidgets import (QAction, QPushButton, QDialog, QWidget, QHBoxLayout,
                                  QSpacerItem, QSizePolicy, QToolButton)
@@ -35,7 +35,8 @@ from datetime import datetime
 from custom_zoom_tool import CustomZoomTool
 from helper import (create_geopackage_file, split_array_to_chunks, adjust_color, show_delete_confirmation,
                     get_existing_layers, get_bing_layer, get_existing_enabled_layers, get_default_button_height,
-                    get_default_button_width, get_default_button_font, get_default_button_font_colour)
+                    get_default_button_width, get_default_button_font, get_default_button_font_colour,
+                    get_default_auto_update_interval)
 
 from qgis.core import (QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer,
                        Qgis, QgsCoordinateReferenceSystem)
@@ -155,6 +156,8 @@ class DigitalSketchMappingTool:
         self.layers_to_be_added = None
         self.gps_connection = None
         self.rotate_on_gps_before_digitising = None
+        self.auto_update_Timer = None
+        self.auto_update_enabled = False
 
         self.iface.newProjectCreated.connect(self.on_new_project_created)
         self.iface.projectRead.connect(self.on_new_project_loaded)
@@ -322,6 +325,8 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.polygonPushButton.clicked.connect(
             lambda: self.setup_digitizing(self.polygon_layer, 'polygons'))
 
+        self.digital_sketch_widget.autoUpdateSlider.valueChanged.connect(self.auto_update_toggled)
+
         QgsProject.instance().layerRemoved.connect(self.layer_removed)
 
 
@@ -345,10 +350,10 @@ class DigitalSketchMappingTool:
             return
 
         self.gps_connection = connections[0]
-        self.gps_connection.positionChanged.connect(self.recenter_if_outside_extent)
+        self.gps_connection.positionChanged.connect(self.rotate_and_recenter_with_a_buffer)
 
 
-    def recenter_if_outside_extent(self, position):
+    def rotate_and_recenter_with_a_buffer(self, position):
         """Gets the current bearing from the connections and if the bearing value is not null:
         get the bearing and set it by convert it to mathematical rotation
         convert the position to device space coordinate to set the buffer
@@ -362,7 +367,7 @@ class DigitalSketchMappingTool:
             return
 
         try:
-            self.gps_connection.positionChanged.disconnect(self.recenter_if_outside_extent)
+            self.gps_connection.positionChanged.disconnect(self.rotate_and_recenter_with_a_buffer)
         except Exception as e:
             QgsApplication.messageLog().logMessage(f"error: {e}", "DigitalSketchPlugin")
 
@@ -601,6 +606,55 @@ class DigitalSketchMappingTool:
 
         # Connect to feature added signal
         layer.featureAdded.connect(lambda fid: self.process_layer_after_adding(fid, layer, layer_type))
+
+
+    def auto_update_toggled(self, value):
+        """Handle the auto-update toggled event.
+        If auto update then the tool will be enabled and set up for auto update.
+        Else, disable auto update and if there is timer set up stop it.
+
+        :param value: Boolean value of the toggled event
+        """
+        if value != 1:
+            self.auto_update_enabled = False
+            if self.auto_update_Timer is not None:
+                self.auto_update_Timer.stop()
+            return
+
+        self.auto_update_enabled = True
+        self.setup_auto_gps_update()
+
+
+    def setup_auto_gps_update(self):
+        """Set the auto gps rotate and centering.
+        Get the gps connection from the GPS registry if a connection exists, then use it. Else display an error message.
+        If the update_interval attribute is defined, then use it. Otherwise, get the default interval.
+        Convert the interval from seconds to milliseconds and set the auto-update timer.
+        """
+
+        connections = QgsApplication.gpsConnectionRegistry().connectionList()
+        if not connections or len(connections) == 0:
+            self.iface.messageBar().pushMessage("Info", "Check GPS Connection.", level=Qgis.Warning, duration=5)
+            return
+
+        self.gps_connection = connections[0]
+        interval = self.attributes["update_interval"] if self.attributes is not None else get_default_auto_update_interval()
+        self.auto_update_Timer = QTimer()
+        self.auto_update_Timer.timeout.connect(self.get_gps_data())
+        self.auto_update_Timer.start(interval * 1000)
+
+
+    def get_gps_data(self):
+        """Get the Position data from the GPS Connection.
+        Call the rotate_and_recenter_with_a_buffer method to update the map.
+        """
+        position = self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Location)
+
+        if position is None:
+            self.iface.messageBar().pushMessage("Info", "Check GPS Connection.", level=Qgis.Warning, duration=5)
+            return
+
+        self.rotate_and_recenter_with_a_buffer(position)
 
 
     def zoom_to_map(self, is_zoom_in):

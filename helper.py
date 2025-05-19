@@ -308,3 +308,11 @@ def get_default_button_font_colour():
     :return: Default font colour for buttons.
     """
     return "#000000"
+
+def get_default_auto_update_interval():
+    """Get the default auto-update interval in seconds
+
+    return: Default auto-update interval in seconds.
+    """
+
+    return 10
