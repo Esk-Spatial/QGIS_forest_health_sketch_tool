@@ -634,7 +634,7 @@ class DigitalSketchMappingTool:
 
         connections = QgsApplication.gpsConnectionRegistry().connectionList()
         if not connections or len(connections) == 0:
-            self.iface.messageBar().pushMessage("Info", "Check GPS Connection.", level=Qgis.Warning, duration=5)
+            self.auto_update_position_error()
             return
 
         self.gps_connection = connections[0]
@@ -651,10 +651,17 @@ class DigitalSketchMappingTool:
         position = self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Location)
 
         if position is None:
-            self.iface.messageBar().pushMessage("Info", "Check GPS Connection.", level=Qgis.Warning, duration=5)
+            self.auto_update_position_error()
             return
 
         self.rotate_and_recenter_with_a_buffer(position)
+
+
+    def auto_update_position_error(self, show_message=True):
+        self.auto_update_enabled = False
+        self.digital_sketch_widget.autoUpdateSlider.setSliderPosition(0)
+        if show_message:
+            self.iface.messageBar().pushMessage("Info", "Check GPS Connection.", level=Qgis.Warning, duration=5)
 
 
     def zoom_to_map(self, is_zoom_in):
