@@ -158,6 +158,8 @@ class DigitalSketchMappingTool:
         self.rotate_on_gps_before_digitising = None
         self.auto_update_Timer = None
         self.auto_update_enabled = False
+        self.previous_bearing = None
+        self.bearing_delta = 5
 
         self.iface.newProjectCreated.connect(self.on_new_project_created)
         self.iface.projectRead.connect(self.on_new_project_loaded)
@@ -353,13 +355,19 @@ class DigitalSketchMappingTool:
         self.gps_connection.positionChanged.connect(self.rotate_and_recenter_with_a_buffer)
 
 
-    def rotate_and_recenter_with_a_buffer(self, position):
+    def rotate_and_recenter_with_a_buffer(self, position, auto_rotate=False, recenter=False):
         """Gets the current bearing from the connections and if the bearing value is not null:
         get the bearing and set it by convert it to mathematical rotation
         convert the position to device space coordinate to set the buffer
 
         :param position current position emitted by the GPS
         :type position: QgsPoint
+
+        :param auto_rotate: boolean value to indicate if the map should be rotated automatically
+        :type auto_rotate: bool
+
+        :param recenter: boolean value to indicate if the buffer should be set
+        :Type recenter: bool
         """
         bearing_val = self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Bearing)
 
@@ -376,7 +384,17 @@ class DigitalSketchMappingTool:
 
         # get the positive value for the rotation
         rotation = (360 - bearing_val) % 360
-        self.canvas.setRotation(rotation)
+
+        if self.previous_bearing is None or not auto_rotate:
+            QgsApplication.messageLog().logMessage(f"previous bearing is none and {auto_rotate} {self.previous_bearing is None or not auto_rotate}", "DigitalSketchPlugin")
+            self.canvas.setRotation(rotation)
+            self.previous_bearing = rotation
+
+        elif self.previous_bearing is not None and auto_rotate:
+            delta = abs(self.previous_bearing - rotation)
+            if delta > self.bearing_delta:
+                self.canvas.setRotation(rotation)
+                self.previous_bearing = rotation
 
         # Get GPS point in map CRS
         gps_point = QgsPointXY(position.x(), position.y())
@@ -385,6 +403,11 @@ class DigitalSketchMappingTool:
             transformer = QgsCoordinateTransform(QgsCoordinateReferenceSystem("EPSG:4326"), map_crs,
                                                  QgsProject.instance())
             gps_point_map = transformer.transform(gps_point)
+
+        if recenter:
+            self.canvas.setCenter(gps_point_map)
+            self.canvas.refresh()
+            return
 
         """Getting the position of the GPS in respective of the device coordinates.
             setting the offset using the canvas height
@@ -485,6 +508,7 @@ class DigitalSketchMappingTool:
             self.create_geopackage_file(self.attributes['project_name'])
             self.zoom_to_location()
 
+
     def set_layer_from_existing(self, layers):
         """Sets the sketch layers from existing layers in the project
 
@@ -499,6 +523,7 @@ class DigitalSketchMappingTool:
         self.line_layer = layers['lines'] if "lines" in layers else None
 
         self.set_style_and_digitizing_tool()
+
 
     def load_bing_maps(self):
         """Load Bing Maps XYZ layer"""
@@ -589,6 +614,10 @@ class DigitalSketchMappingTool:
                 self.save_layers(False)
             self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
 
+
+        if self.auto_update_enabled:
+            self.digital_sketch_widget.autoUpdateSlider.setSliderPosition(0)
+
         # Make layer active and editable
         self.feature_identify_tool.remove_highlight()
         self.check_for_current_selection(layer_type)
@@ -610,11 +639,12 @@ class DigitalSketchMappingTool:
 
     def auto_update_toggled(self, value):
         """Handle the auto-update toggled event.
-        If auto update then the tool will be enabled and set up for auto update.
+        If auto update is toggled then the map will be rotated and centered automatically.
         Else, disable auto update and if there is timer set up stop it.
 
         :param value: Boolean value of the toggled event
         """
+
         if value != 1:
             self.auto_update_enabled = False
             if self.auto_update_Timer is not None:
@@ -640,26 +670,41 @@ class DigitalSketchMappingTool:
         self.gps_connection = connections[0]
         interval = self.attributes["update_interval"] if self.attributes is not None else get_default_auto_update_interval()
         self.auto_update_Timer = QTimer()
-        self.auto_update_Timer.timeout.connect(self.get_gps_data())
+        self.auto_update_Timer.timeout.connect(self.get_gps_data)
         self.auto_update_Timer.start(interval * 1000)
 
 
-    def get_gps_data(self):
+    def get_gps_data(self, auto_rotate=True, recenter=False):
         """Get the Position data from the GPS Connection.
         Call the rotate_and_recenter_with_a_buffer method to update the map.
+
+        :param auto_rotate: Boolean value to indicate if its called
+        :type auto_rotate: bool
+
+        :param recenter: Boolean value to indicate if the map should be re-centered
+        :type recenter: bool
         """
         position = self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Location)
 
-        if position is None:
-            self.auto_update_position_error()
+        if position is None and not recenter:
+            self.auto_update_position_error(recenter)
             return
 
-        self.rotate_and_recenter_with_a_buffer(position)
+        self.rotate_and_recenter_with_a_buffer(position, auto_rotate, recenter)
 
 
-    def auto_update_position_error(self, show_message=True):
-        self.auto_update_enabled = False
-        self.digital_sketch_widget.autoUpdateSlider.setSliderPosition(0)
+    def auto_update_position_error(self, recenter=False, show_message=True):
+        """Display check GPS Connection Error message.
+
+        :param recenter: Boolean value to indicate if the map should be recentered (triggered via Done)
+        :type recenter: bool
+
+        :param show_message: Boolean value to indicate if a message should be shown on the Error message bar
+        :type show_message: bool
+        """
+        if not recenter:
+            self.auto_update_enabled = False
+            self.digital_sketch_widget.autoUpdateSlider.setSliderPosition(0)
         if show_message:
             self.iface.messageBar().pushMessage("Info", "Check GPS Connection.", level=Qgis.Warning, duration=5)
 
@@ -851,7 +896,6 @@ class DigitalSketchMappingTool:
             return
 
         else:
-            QgsApplication.messageLog().logMessage("Done Digitizing is called", 'DigitalSketchPlugin')
             self.clear_current_btn_selection()
             self.clicked_buttons.clear()
             self.text_changed = False
@@ -861,6 +905,15 @@ class DigitalSketchMappingTool:
             attributes = dict(colour=self.selected_colour, code=code_attr, surveyor=surveyor,
                               type_txt=type_txt)
             self.digitizing_tool.save_feature(attributes)
+            if self.attributes['rotate_recenter_on_done']:
+                connections = QgsApplication.gpsConnectionRegistry().connectionList()
+                if not connections or len(connections) == 0:
+                    self.iface.messageBar().pushMessage("Info", "Check GPS Connection.", level=Qgis.Warning, duration=5)
+                    return
+
+                self.gps_connection = connections[0]
+                self.get_gps_data(False, True)
+
 
 
     def code_text_changed(self):

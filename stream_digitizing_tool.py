@@ -1,6 +1,6 @@
 
 from qgis.gui import QgsMapTool, QgsRubberBand
-from qgis.core import QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry, QgsApplication, QgsProject
+from qgis.core import QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry, QgsApplication, QgsProject, Qgis
 from PyQt5.QtCore import Qt
 from qgis.PyQt.QtGui import QColor
 
@@ -9,6 +9,17 @@ from helper import update_feature_attributes, reproject_to_destination_crs
 
 class StreamDigitizingTool(QgsMapTool):
     def __init__(self, iface, layer, layer_type):
+        """Constructor
+
+        :param iface: QGIS interface
+        :type iface: QgsInterface
+
+        :param layer: QGIS layer, Point or Polygon
+        :type layer: QgsVectorLayer
+
+        :param layer_type: Type of layer, points/polygons
+        :type layer_type: str
+        """
         super().__init__(iface.mapCanvas())
         self.number_of_items_to_update = 1
         self.iface = iface
@@ -103,8 +114,10 @@ class StreamDigitizingTool(QgsMapTool):
             self.layer.startEditing()
 
         self.number_of_items_to_update = len(self.pending_features)
-        QgsApplication.messageLog().logMessage(f'num: {self.number_of_items_to_update}', 'DigitalSketchPlugin')
         for feature in self.pending_features:
+            if feature.geometry() is None:
+                self.iface.messageBar().pushMessage("Warning", "Geometry is None.", level=Qgis.Warning, duration=5)
+                continue
             self.layer.addFeature(update_feature_attributes(feature, self.layer_type, attributes))
 
         self.pending_features = []
