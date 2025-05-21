@@ -2,7 +2,6 @@ import copy
 from PyQt5.QtCore import Qt
 
 from data.db_handler import DbHandler
-from qgis.core import QgsApplication
 
 class Keypad:
     def __init__(self, cat_id: int, category: str, selected: bool, colour: str, items: list):

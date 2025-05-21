@@ -8,6 +8,14 @@ from helper import update_feature_attributes, reproject_to_destination_crs
 
 class MultiLineDigitizingTool(QgsMapTool):
     def __init__(self, iface, layer):
+        """Constructor
+
+        :param iface: QGIS interface
+        :type iface: QgsInterface
+
+        :param layer: QGIS multi line layer
+        :type layer: QgsVectorLayer
+        """
         super().__init__(iface.mapCanvas())
         self.iface = iface
         self.number_of_items_to_update = 1
