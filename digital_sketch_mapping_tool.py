@@ -357,7 +357,7 @@ class DigitalSketchMappingTool:
         self.gps_connection.positionChanged.connect(self.rotate_and_recenter_with_a_buffer)
 
 
-    def rotate_and_recenter_with_a_buffer(self, position, auto_rotate=False, recenter=False):
+    def rotate_and_recenter_with_a_buffer(self, position, auto_rotate=False):
         """Gets the current bearing from the connections and if the bearing value is not null:
         get the bearing and set it by convert it to mathematical rotation
         convert the position to device space coordinate to set the buffer
@@ -367,9 +367,6 @@ class DigitalSketchMappingTool:
 
         :param auto_rotate: boolean value to indicate if the map should be rotated automatically
         :type auto_rotate: bool
-
-        :param recenter: boolean value to indicate if the buffer should be set
-        :Type recenter: bool
         """
         bearing_val = self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Bearing)
 
@@ -405,11 +402,6 @@ class DigitalSketchMappingTool:
             transformer = QgsCoordinateTransform(QgsCoordinateReferenceSystem("EPSG:4326"), map_crs,
                                                  QgsProject.instance())
             gps_point_map = transformer.transform(gps_point)
-
-        if recenter:
-            self.canvas.setCenter(gps_point_map)
-            self.canvas.refresh()
-            return
 
         """Getting the position of the GPS in respective of the device coordinates.
             setting the offset using the canvas height
@@ -667,52 +659,63 @@ class DigitalSketchMappingTool:
         Convert the interval from seconds to milliseconds and set the auto-update timer.
         """
 
-        connections = QgsApplication.gpsConnectionRegistry().connectionList()
-        if not connections or len(connections) == 0:
-            self.auto_update_position_error()
+        self.gps_connection = self.check_for_gps_connection()
+
+        if self.gps_connection is None:
             return
 
-        self.gps_connection = connections[0]
         interval = self.attributes["update_interval"] if self.attributes is not None else get_default_auto_update_interval()
         self.auto_update_Timer = QTimer()
         self.auto_update_Timer.timeout.connect(self.get_gps_data)
         self.auto_update_Timer.start(interval * 1000)
 
 
-    def get_gps_data(self, auto_rotate=True, recenter=False):
+    def check_for_gps_connection(self):
+        """Check if there is a GPS connection"""
+        connections = QgsApplication.gpsConnectionRegistry().connectionList()
+        if not connections or len(connections) == 0:
+            self.auto_update_position_error()
+            return None
+
+        return connections[0]
+
+
+    def get_gps_data(self, auto_rotate=True, done_digitizing=False):
         """Get the Position data from the GPS Connection.
         Call the rotate_and_recenter_with_a_buffer method to update the map.
 
         :param auto_rotate: Boolean value to indicate if its called
         :type auto_rotate: bool
 
-        :param recenter: Boolean value to indicate if the map should be re-centered
-        :type recenter: bool
+        :param done_digitizing: Boolean value to indicate if the method is called after digitizing
+        :type done_digitizing: bool
         """
-        if self.auto_update_disabled:
+        if self.auto_update_disabled and not done_digitizing:
+            return
+
+        self.gps_connection = self.check_for_gps_connection()
+
+        if self.gps_connection is None:
             return
 
         position = self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Location)
 
-        if position is None and not recenter:
-            self.auto_update_position_error(recenter)
+        if position is None:
+            self.auto_update_position_error()
             return
 
-        self.rotate_and_recenter_with_a_buffer(position, auto_rotate, recenter)
+        self.rotate_and_recenter_with_a_buffer(position, auto_rotate)
 
 
-    def auto_update_position_error(self, recenter=False, show_message=True):
+    def auto_update_position_error(self, show_message=True):
         """Display check GPS Connection Error message.
-
-        :param recenter: Boolean value to indicate if the map should be recentered (triggered via Done)
-        :type recenter: bool
 
         :param show_message: Boolean value to indicate if a message should be shown on the Error message bar
         :type show_message: bool
         """
-        if not recenter:
-            self.auto_update_enabled = False
-            self.digital_sketch_widget.autoUpdateSlider.setSliderPosition(0)
+        self.auto_update_enabled = False
+        self.digital_sketch_widget.autoUpdateSlider.setSliderPosition(0)
+
         if show_message:
             self.iface.messageBar().pushMessage("Info", "Check GPS Connection.", level=Qgis.Warning, duration=5)
 
@@ -751,6 +754,7 @@ class DigitalSketchMappingTool:
 
         if self.auto_update_enabled:
             self.update_auto_update_disabled_flag(False)
+            self.change_gps_settings(True)
 
         layers = [
             (self.point_layer, "Point"),
