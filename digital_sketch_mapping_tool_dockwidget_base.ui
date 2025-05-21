@@ -369,7 +369,7 @@
             <x>0</x>
             <y>0</y>
             <width>405</width>
-            <height>542</height>
+            <height>553</height>
            </rect>
           </property>
           <property name="minimumSize">
@@ -696,6 +696,11 @@ QSlider::handle:horizontal {
     height: 20px;
     margin: -6px 0;
     border-radius: 2px;
+}
+/* Red style when disabled */
+QSlider::groove:horizontal:disabled,
+QSlider::sub-page:horizontal:disabled {
+    background: red;
 }</string>
                </property>
                <property name="maximum">

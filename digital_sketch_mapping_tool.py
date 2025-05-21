@@ -118,6 +118,7 @@ class DigitalSketchMappingTool:
         self.digitizing_tool = None
         self.canvas = self.iface.mapCanvas()
         self.folder_location = None
+        self.geopackage_created = None
         self.feature_string = ""
         self.selected_colour = "#7a3dc617"
         self.folder_location_set = False
@@ -158,6 +159,7 @@ class DigitalSketchMappingTool:
         self.rotate_on_gps_before_digitising = None
         self.auto_update_Timer = None
         self.auto_update_enabled = False
+        self.auto_update_disabled = False
         self.previous_bearing = None
         self.bearing_delta = 5
 
@@ -500,13 +502,15 @@ class DigitalSketchMappingTool:
     def set_folder_location(self):
         """Sets the folder location defined in the setting window and load bing maps if checked"""
         folder = self.attributes['folder_path']
-        if folder:
-            self.folder_location = folder
-            self.folder_location_set = True
-            if self.attributes['add_bing_imagery']:
-                self.load_bing_maps()
-            self.create_geopackage_file(self.attributes['project_name'])
-            self.zoom_to_location()
+        if not folder:
+            return
+
+        self.folder_location = folder
+        self.folder_location_set = True
+        if self.attributes['add_bing_imagery']:
+            self.load_bing_maps()
+        self.create_geopackage_file(self.attributes['project_name'])
+        self.zoom_to_location()
 
 
     def set_layer_from_existing(self, layers):
@@ -616,7 +620,7 @@ class DigitalSketchMappingTool:
 
 
         if self.auto_update_enabled:
-            self.digital_sketch_widget.autoUpdateSlider.setSliderPosition(0)
+            self.update_auto_update_disabled_flag(True)
 
         # Make layer active and editable
         self.feature_identify_tool.remove_highlight()
@@ -652,6 +656,7 @@ class DigitalSketchMappingTool:
             return
 
         self.auto_update_enabled = True
+        self.change_gps_settings(True)
         self.setup_auto_gps_update()
 
 
@@ -684,6 +689,9 @@ class DigitalSketchMappingTool:
         :param recenter: Boolean value to indicate if the map should be re-centered
         :type recenter: bool
         """
+        if self.auto_update_disabled:
+            return
+
         position = self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Location)
 
         if position is None and not recenter:
@@ -740,6 +748,9 @@ class DigitalSketchMappingTool:
         if show_message:
             self.change_gps_settings(False)
             self.check_for_current_selection()
+
+        if self.auto_update_enabled:
+            self.update_auto_update_disabled_flag(False)
 
         layers = [
             (self.point_layer, "Point"),
@@ -876,7 +887,8 @@ class DigitalSketchMappingTool:
                 self.populate_categories()
 
             else:
-                self.show_error_message('All sketch layers are not defined')
+                if self.geopackage_created:
+                    self.show_error_message('All sketch layers are not defined')
 
             bing_layer = get_bing_layer(self.bing_layer_name)
             if self.attributes['add_bing_imagery'] and not bool(bing_layer):
@@ -1107,7 +1119,10 @@ class DigitalSketchMappingTool:
         if self.project_crs is None:
             self.project_crs = '+proj=longlat +datum=WGS84 +no_defs'
 
-        create_geopackage_file(gpkg_file_name, self.project_crs)
+        self.geopackage_created = create_geopackage_file(gpkg_file_name, self.iface, self.project_crs)
+
+        if not self.geopackage_created:
+            return
 
         self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-points", f"{project_name}-sketch-points", "ogr")
         self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-lines", f"{project_name}-sketch-lines", "ogr")
@@ -1252,6 +1267,16 @@ class DigitalSketchMappingTool:
             layer = self.polygon_layer
 
         layer.startEditing()
+
+
+    def update_auto_update_disabled_flag(self, state):
+        """Update the auto update disabled flag.
+
+        :param state: State (disabled or enabled)
+        :type state: bool
+        """
+        self.auto_update_disabled = state
+        self.digital_sketch_widget.autoUpdateSlider.setDisabled(state)
 
 
     def onClosePlugin(self):

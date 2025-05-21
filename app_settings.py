@@ -109,7 +109,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             self.update_interval = attributes["update_interval"]
             self.autoUpdateComboBox.setCurrentIndex(intervals_list.index(self.update_interval))
             self.rotate_recenter_on_done = attributes["rotate_recenter_on_done"]
-            self.autoUpdateComboBox.setChecked(attributes["rotate_recenter_on_done"])
+            self.rorateAndRecenterCheckBox.setChecked(attributes["rotate_recenter_on_done"])
 
         if disable_existing:
             self.useExistingLayerCheckBox.setDisabled(True)

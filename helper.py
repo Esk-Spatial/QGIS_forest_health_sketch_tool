@@ -15,13 +15,16 @@ except ImportError:
 import platform
 
 from qgis.PyQt.QtGui import QColor, QFont
-from qgis.core import QgsCoordinateTransform, QgsProject, QgsApplication, QgsLayerTreeGroup, QgsLayerTreeLayer
+from qgis.core import QgsCoordinateTransform, QgsProject, QgsApplication, QgsLayerTreeGroup, QgsLayerTreeLayer, Qgis
 
-def create_geopackage_file(path, crs=None):
+def create_geopackage_file(path, iface, crs=None):
     """Create a new GeoPackage file with the given path and CRS
 
     :param path: Path to save the GeoPackage file to.
     :type path: str or pathlib.Path
+
+    :param iface: QGIS interface object.
+    :type iface: QgsInterface
 
     :param crs: CRS to use for the GeoPackage file. Defaults to EPSG:4326.
     :type crs: str, optional
@@ -32,26 +35,33 @@ def create_geopackage_file(path, crs=None):
     if driver is None:
         return False
 
-    gpkg_file = driver.CreateDataSource(str(path))
-    if gpkg_file is None:
-        return False
+    try:
+        gpkg_file = driver.CreateDataSource(str(path))
+        if gpkg_file is None:
+            return False
 
-    spatial_ref = osr.SpatialReference()
-    spatial_ref.ImportFromProj4(crs)
+        spatial_ref = osr.SpatialReference()
+        spatial_ref.ImportFromProj4(crs)
 
-    # Create layers
-    point_layer = gpkg_file.CreateLayer('sketch-points', srs=spatial_ref, geom_type=ogr.wkbPoint)
-    polygon_layer = gpkg_file.CreateLayer('sketch-polygons', srs=spatial_ref, geom_type=ogr.wkbPolygon)
-    line_layer = gpkg_file.CreateLayer('sketch-lines', srs=spatial_ref, geom_type=ogr.wkbMultiLineString)
+        # Create layers
+        point_layer = gpkg_file.CreateLayer('sketch-points', srs=spatial_ref, geom_type=ogr.wkbPoint)
+        polygon_layer = gpkg_file.CreateLayer('sketch-polygons', srs=spatial_ref, geom_type=ogr.wkbPolygon)
+        line_layer = gpkg_file.CreateLayer('sketch-lines', srs=spatial_ref, geom_type=ogr.wkbMultiLineString)
 
-    for layer in [point_layer, polygon_layer, line_layer]:
-        setup_layer_attr(layer)
+        for layer in [point_layer, polygon_layer, line_layer]:
+            setup_layer_attr(layer)
 
-    # Close dataset properly
-    gpkg_file.FlushCache()
-    gpkg_file = None  # Ensure proper closure
+        # Close dataset properly
+        gpkg_file.FlushCache()
+        gpkg_file = None  # Ensure proper closure
 
-    return True  # Return True if successful
+        return True  # Return True if successful
+    except Exception as e:
+        QgsApplication.messageLog().logMessage(f"error: {e}", "DigitalSketchPlugin")
+        iface.messageBar().pushMessage("Error", "Error Creating the GeoPackage File. Please try again with a different folder path.",
+                                            level=Qgis.Critical, duration=5)
+        return None
+
 
 def setup_layer_attr(layer):
     """Setup layer attributes for the given layer
