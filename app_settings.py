@@ -105,6 +105,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
             if attributes["use_existing"]:
                 self.toggle_project_name_and_file_read_only_state(True)
             self.project_changed = attributes['project_changed'] if attributes['project_changed'] is not None else False
+            self.add_bing_imagery = attributes["add_bing_imagery"]
             self.bingImageryCheckBox.setChecked(attributes["add_bing_imagery"])
             self.update_interval = attributes["update_interval"]
             self.autoUpdateComboBox.setCurrentIndex(intervals_list.index(self.update_interval))

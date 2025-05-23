@@ -7,6 +7,7 @@ import os
 FORM_CLASS, _ = uic.loadUiType(os.path.join(os.path.dirname(__file__), "confirmation.ui"))
 
 class ConfirmationDialog(QDialog, FORM_CLASS):
+    """Confirmation Dialog"""
     def __init__(self, parent=None):
         super(ConfirmationDialog, self).__init__(parent)
         self.setupUi(self)

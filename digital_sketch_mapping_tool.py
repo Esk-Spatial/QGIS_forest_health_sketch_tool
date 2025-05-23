@@ -605,9 +605,16 @@ class DigitalSketchMappingTool:
             self.check_for_current_selection()
             return
 
+        """If the digitizing tool is set i.e. another layer is editable.
+        Check if there are any pending features that needs to be saved then save the layer.
+        If not loop through the layers and commit changes such that only one layer would be editable.
+        Remove the current digitizing tool from the map canvas.
+        """
         if self.digitizing_tool is not None:
             if self.digitizing_tool.features_to_save():
                 self.save_layers(False)
+            else:
+                self.iterate_and_commit_layers(False)
             self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
 
 
@@ -635,7 +642,7 @@ class DigitalSketchMappingTool:
 
     def auto_update_toggled(self, value):
         """Handle the auto-update toggled event.
-        If auto update is toggled then the map will be rotated and centered automatically.
+        If the auto-update is toggled, then the map will be rotated and centered automatically.
         Else, disable auto update and if there is timer set up stop it.
 
         :param value: Boolean value of the toggled event
@@ -756,6 +763,16 @@ class DigitalSketchMappingTool:
             self.update_auto_update_disabled_flag(False)
             self.change_gps_settings(True)
 
+        self.iterate_and_commit_layers(show_message)
+
+
+    def iterate_and_commit_layers(self, show_message):
+        """This function will iterate over sketch layers and see if they are editable if so commit changes.
+        If show_message is True, then will show a success message on the Message Bar
+
+        :param show_message: Should the commit changes message be shown or not.
+        :type show_message: bool
+        """
         layers = [
             (self.point_layer, "Point"),
             (self.line_layer, "Line"),
@@ -764,11 +781,10 @@ class DigitalSketchMappingTool:
 
         for layer, name in layers:
             if layer.isEditable():
-                QgsApplication.messageLog().logMessage(f"{name} layer is editable", 'DigitalSketchPlugin')
                 layer.commitChanges()  # Save the changes
                 if show_message:
                     self.iface.messageBar().pushMessage("Success", f"Changes committed successfully to {name} layer!",
-                                                    level=Qgis.Success)
+                                                        level=Qgis.Success)
 
 
     def layer_removed(self, layer_id):
@@ -1069,6 +1085,7 @@ class DigitalSketchMappingTool:
 
 
     def reset_selection_digitize_tool(self):
+        """This clears the feature selection and if the digitize tool is set remove it from the map."""
         self.selected_attribute = None
         self.highlight = None
         self.vertex_marker = None
@@ -1191,6 +1208,7 @@ class DigitalSketchMappingTool:
         widget.setMinimumHeight(height + 1)
         widget.setMaximumHeight(height + 1)
 
+        # generate keypad items from the selected category.
         for i in items:
             light_colour = adjust_color(i["colour"], 30)
             btn = QPushButton(i["item"])
@@ -1260,6 +1278,7 @@ class DigitalSketchMappingTool:
 
 
     def update_selected_layer_style(self):
+        """Updated the selected features layer style"""
         layer_type = self.selected_attribute["type"]
 
         layer = None

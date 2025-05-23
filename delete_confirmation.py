@@ -12,6 +12,7 @@ class DeleteConfirmationDialog(QDialog, FORM_CLASS):
 
         :param text: The text to display in the confirmation dialog.
         :type text: str
+
         :param parent: The parent widget for the confirmation dialog.
         :type parent: QWidget, optional
         """
@@ -23,7 +24,9 @@ class DeleteConfirmationDialog(QDialog, FORM_CLASS):
         self.rejectPushButton.clicked.connect(self.reject_delete)
 
     def confirm_delete(self):
+        """This function will be fired when and if the user clicks on the Confirm button."""
         self.accept()
 
     def reject_delete(self):
+        """This function will be fired when and if the user clicks on the Reject button."""
         self.reject()
