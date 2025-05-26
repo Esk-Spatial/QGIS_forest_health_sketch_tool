@@ -329,6 +329,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
         if not category:
             return
 
+        # Loop through the selected category list
         for element in category.items:
             item = QListWidgetItem(self.elementListWidget)
             widget = QWidget()
@@ -439,7 +440,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
 
     def delete_keypad_category(self, db):
-        """Function will be called when keypad category delete button is clicked.
+        """Function will be called when the keypad category delete button is clicked.
         Shows a confirmation dialog before deleting the category
 
         :param db: The button object
@@ -453,7 +454,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
 
     def edit_keypad_item(self, eb):
-        """Function will be called when keypad item edit button is clicked.
+        """Function will be called when the keypad item edit button is clicked.
         Opens a dialog to edit the element name.
 
         :param eb: The button object
@@ -467,7 +468,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
 
     def delete_keypad_item(self, db):
-        """Function will be called when keypad item delete button is clicked.
+        """Function will be called when the keypad item delete button is clicked.
         Shows a confirmation dialog before deleting the element.
 
         :param db: The button object
@@ -493,7 +494,7 @@ class AppSettingsDialog(QDialog, FORM_CLASS):
 
     def clear_selection(self):
         """Clear the fields for project name, location and enable those fields to be edited.
-        Clear exisiting layer and use bing imager check boxes.
+        Clear existing layer and use bing imager check boxes.
         """
         self.projectNameLineEdit.setText('')
         self.projectNameLineEdit.setReadOnly(False)
