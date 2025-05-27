@@ -86,7 +86,6 @@ def apply_symbology(layer, iface):
 
 def delete_keypad_items(attr_box)    :
     if not attr_box.isEmpty():
-        QgsApplication.messageLog().logMessage('Need to remove', 'DigitalSketchPlugin')
         count = attr_box.count()
         if count > 0 and attr_box.itemAt(count - 1).spacerItem() is not None:
             attr_box.takeAt(count - 1)  # Remove the existing spacer
@@ -283,17 +282,9 @@ class DigitalSketchMappingTool:
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
-        settings = QSettings()
         self.init_database_if_not_exists()
-        attr_value = str(settings.value("qgis/digitizing/disable_enter_attribute_values_dialog", "false")).lower()
-        QgsApplication.messageLog().logMessage(f'attr_value: {attr_value}.', "DigitalSketchPlugin")
-        QgsApplication.messageLog().logMessage(f'settings: {settings.fileName()}.', "DigitalSketchPlugin")
-        if attr_value == 'false':
-            QgsApplication.messageLog().logMessage("updating to true", 'DigitalSketchPlugin')
 
         icon_path = ':/plugins/digital_sketch_mapping_tool/icons/icon.png'
-
-        QgsApplication.messageLog().logMessage(f"icon_path {icon_path}", 'DigitalSketchPlugin')
 
         action = self.add_action(
             icon_path,
@@ -385,7 +376,6 @@ class DigitalSketchMappingTool:
         rotation = (360 - bearing_val) % 360
 
         if self.previous_bearing is None or not auto_rotate:
-            QgsApplication.messageLog().logMessage(f"previous bearing is none and {auto_rotate} {self.previous_bearing is None or not auto_rotate}", "DigitalSketchPlugin")
             self.canvas.setRotation(rotation)
             self.previous_bearing = rotation
 
@@ -527,7 +517,6 @@ class DigitalSketchMappingTool:
         bing_layer = QgsRasterLayer(xyz_uri, self.bing_layer_name, "wms")
 
         if not bing_layer.isValid():
-            QgsApplication.messageLog().logMessage("Failed to load Bing Maps layer.", "DigitalSketchPlugin")
             return
 
         QgsProject.instance().addMapLayer(bing_layer, False)
@@ -997,7 +986,6 @@ class DigitalSketchMappingTool:
             if len(self.created_layers_stack) == 0:
                 return
 
-            QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
             last_index = len(self.created_layers_stack)-1
             last_layer = self.created_layers_stack[last_index]
             layer_type = last_layer["type"]
@@ -1005,7 +993,6 @@ class DigitalSketchMappingTool:
             layer_code = last_layer["code"]
             if show_delete_confirmation(f'most recent feature?\n(Layer: {layer_type} Code: {layer_code})') == QDialog.Accepted:
                 self.created_layers_stack.pop()
-                QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
             else:
                 return
 
@@ -1129,12 +1116,9 @@ class DigitalSketchMappingTool:
         :param project_name: Name of the project
         :type project_name: str
         """
-        QgsApplication.messageLog().logMessage('creating new gpkg file', 'DigitalSketchPlugin')
         date_time_str = datetime.now().strftime("%d-%m-%Y_%I-%M-%p")
         gpkg_file_name = f"{project_name}_{date_time_str}.gpkg"
         gpkg_file_name = os.path.join(self.folder_location, gpkg_file_name)
-        QgsApplication.messageLog().logMessage(f'file name: {gpkg_file_name} file path: {gpkg_file_name}',
-                                               'DigitalSketchPlugin')
 
         self.project_crs = str(self.canvas.mapSettings().destinationCrs().toProj())
         if self.project_crs is None:

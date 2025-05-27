@@ -29,13 +29,11 @@ class FeatureIdentifyTool(QgsMapTool):
             event (QgsMapMouseEvent): The mouse event object containing details about the interaction
             on the map canvas.
         """
-        QgsApplication.messageLog().logMessage("FeatureIdentifyTool triggered", "DigitalSketchPlugin")
         identify_tool = QgsMapToolIdentify(self.iface.mapCanvas())
         layers = QgsProject.instance().mapLayers().values()  # Get all layers
         results = identify_tool.identify(event.x(), event.y(), layers, QgsMapToolIdentify.TopDownAll)
 
         if not results:
-            QgsApplication.messageLog().logMessage("No feature clicked", "DigitalSketchPlugin")
             self.remove_highlight()
             return
 
