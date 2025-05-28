@@ -309,17 +309,11 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
         self.digital_sketch_widget.deletePushButton.clicked.connect(self.remove_feature)
         self.digital_sketch_widget.centerAndRotatePushButton.clicked.connect(self.center_and_rotate_map)
-
         self.digital_sketch_widget.codeLineEdit.textEdited.connect(self.code_text_changed)
         self.digital_sketch_widget.codeLineEdit.editingFinished.connect(self.code_text_changed_finished)
-
-        self.digital_sketch_widget.linePushButton.clicked.connect(
-            lambda: self.setup_digitizing(self.line_layer, 'lines'))
-        self.digital_sketch_widget.pointPushButton.clicked.connect(
-            lambda: self.setup_digitizing(self.point_layer, 'points'))
-        self.digital_sketch_widget.polygonPushButton.clicked.connect(
-            lambda: self.setup_digitizing(self.polygon_layer, 'polygons'))
-
+        self.digital_sketch_widget.linePushButton.clicked.connect(self.start_line_digitizing)
+        self.digital_sketch_widget.pointPushButton.clicked.connect(self.start_point_digitizing)
+        self.digital_sketch_widget.polygonPushButton.clicked.connect(self.start_polygon_digitizing)
         self.digital_sketch_widget.autoUpdateSlider.valueChanged.connect(self.auto_update_toggled)
 
         QgsProject.instance().layerRemoved.connect(self.layer_removed)
@@ -575,6 +569,24 @@ class DigitalSketchMappingTool:
             self.feature_string = f'{self.feature_string}{button_name}'
 
         self.update_code_line_edit(self.feature_string)
+
+
+    def start_line_digitizing(self):
+        """Called when the line button is clicked from the dock widget
+        This function calls the setup digitizing function by passing line layers"""
+        self.setup_digitizing(self.line_layer, 'lines')
+
+
+    def start_point_digitizing(self):
+        """Called when the point button is clicked from the dock widget
+        This function calls the setup digitizing function by passing point layers"""
+        self.setup_digitizing(self.point_layer, 'points')
+
+
+    def start_polygon_digitizing(self):
+        """Called when the polygon button is clicked from the dock widget
+        This function calls the setup digitizing function by passing ploygon layers"""
+        self.setup_digitizing(self.polygon_layer, 'polygons')
 
 
     def setup_digitizing(self, layer, layer_type):
