@@ -54,7 +54,7 @@ class StreamDigitizingTool(QgsMapTool):
     def canvasMoveEvent(self, event):
         """Continue adding points to the current line
 
-        :param event: The mouse event object containing details about the movement interaction on the map canvas
+        :param event: The mouse event object contains details about the movement interaction on the map canvas
         :type event: QgsMapMouseEvent
         """
         if self.digitizing:
@@ -90,7 +90,7 @@ class StreamDigitizingTool(QgsMapTool):
         """Add a vertex to the rubber band.
         This method is called continuously while the stylus is pressed and is moving across the map canvas.
 
-        :param event: The mouse event object containing details about the movement interaction on the map canvas
+        :param event: The mouse event object contains details about the movement interaction on the map canvas
         :type event: QgsMapMouseEvent
         """
         point = self.toMapCoordinates(event.pos())

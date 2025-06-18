@@ -33,6 +33,7 @@ from qgis.core import (QgsApplication, QgsCoordinateReferenceSystem, QgsVectorLa
 from datetime import datetime
 
 from custom_zoom_tool import CustomZoomTool
+from help import HelpDialog
 from helper import (create_geopackage_file, split_array_to_chunks, adjust_color, show_delete_confirmation,
                     get_existing_layers, get_bing_layer, get_existing_enabled_layers, get_default_button_height,
                     get_default_button_width, get_default_button_font, get_default_button_font_colour,
@@ -94,6 +95,10 @@ def delete_keypad_items(attr_box)    :
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
+
+
+def load_help():
+    HelpDialog().exec_()
 
 
 class DigitalSketchMappingTool:
@@ -284,7 +289,7 @@ class DigitalSketchMappingTool:
 
         self.init_database_if_not_exists()
 
-        icon_path = ':/plugins/digital_sketch_mapping_tool/icons/icon.png'
+        icon_path = ':/plugins/digital_sketch_mapping_tool/icon.png'
 
         action = self.add_action(
             icon_path,
@@ -294,6 +299,16 @@ class DigitalSketchMappingTool:
 
         self.actions.append(action)
         self.toolbar.addAction(action)
+
+        help_btn_path = ':/plugins/digital_sketch_mapping_tool/help-icon.png'
+        help_action = self.add_action(
+            help_btn_path,
+            text=self.tr(u'Sketch Tool Help'),
+            callback=load_help,
+            parent=self.iface.mainWindow())
+
+        self.actions.append(help_action)
+        self.toolbar.addAction(help_action)
 
         """Setting up the listeners/signals for the main docked widget:
                 Button click listeners
@@ -757,7 +772,7 @@ class DigitalSketchMappingTool:
             self.done_digitizing()
 
         if show_message:
-            self.change_gps_settings(False)
+            self.change_gps_settings(True)
             self.check_for_current_selection()
 
         if self.auto_update_enabled:
@@ -1297,9 +1312,8 @@ class DigitalSketchMappingTool:
         self.auto_update_disabled = state
         self.digital_sketch_widget.autoUpdateSlider.setDisabled(state)
 
-
     def onClosePlugin(self):
-        """Cleanup necessary items here when plugin dockwidget is closed"""
+        """Cleanup the necessary items here when plugin dockwidget is closed"""
 
         #print "** CLOSING DigitalSketchMappingTool"
 
