@@ -168,12 +168,16 @@ def update_feature_attributes(feature, layer_type, attributes):
     :return: Updated feature with updated attributes.
     """
     geom = feature.geometry()
+    lat = 0
+    lon = 0
     if layer_type == 'points':
         point = geom.asPoint()
         lat, lon = point.y(), point.x()
     else:
-        centroid = geom.centroid().asPoint()
-        lat, lon = centroid.y(), centroid.x()
+        centroid = geom.centroid()
+        if centroid is not None:
+            centroid_as_point = centroid.asPoint()
+            lat, lon = centroid_as_point.y(), centroid_as_point.x()
     colour_attr = attributes['colour'] if layer_type == 'polygons' else ''
     feature.setAttribute('colour', colour_attr)
     feature.setAttribute('shape', layer_type)

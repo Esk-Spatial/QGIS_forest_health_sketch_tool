@@ -37,24 +37,47 @@ class StreamDigitizingTool(QgsMapTool):
             self.rubber_band.setFillColor(QColor(255, 0, 0, 25))
         self.rubber_band.setWidth(2)
 
+
     def canvasPressEvent(self, event):
+        """Start a new line segment on stylus down
+
+        :param event: The mouse event object containing details about the button press interaction on the map canvas
+        :type event: QgsMapMouseEvent
+        """
         if event.button() == Qt.LeftButton:
             if self.layer_type == 'points':
                 self.add_point(event)
             else:
                 self.start_digitizing(event)
 
+
     def canvasMoveEvent(self, event):
+        """Continue adding points to the current line
+
+        :param event: The mouse event object contains details about the movement interaction on the map canvas
+        :type event: QgsMapMouseEvent
+        """
         if self.digitizing:
             self.add_vertex(event)
 
 
     def canvasReleaseEvent(self, event):
+        """Store the completed line segment on stylus up
+
+        :param event: The mouse event object containing details about the mouse button release interaction on the map canvas
+        :type event: QgsMapMouseEvent
+        """
         if event.button() == Qt.LeftButton and self.layer_type != 'points':
             self.finish_digitizing()
 
 
     def start_digitizing(self, event):
+        """Start digitizing a polygon.
+        To enable multi polygons, we need to start a new rubber band.
+
+        :param event: The mouse event object containing details about the button press interaction on the map canvas
+        :type event: QgsMapMouseEvent
+        """
         self.stream_points = [self.toMapCoordinates(event.pos())]
         self.rubber_band = QgsRubberBand(self.iface.mapCanvas(),QgsWkbTypes.PolygonGeometry)
         self.rubber_band.setColor(Qt.red)
@@ -64,6 +87,12 @@ class StreamDigitizingTool(QgsMapTool):
 
 
     def add_vertex(self, event):
+        """Add a vertex to the rubber band.
+        This method is called continuously while the stylus is pressed and is moving across the map canvas.
+
+        :param event: The mouse event object contains details about the movement interaction on the map canvas
+        :type event: QgsMapMouseEvent
+        """
         point = self.toMapCoordinates(event.pos())
         self.stream_points.append(point)
         self.rubber_band.addPoint(point, True)
@@ -71,6 +100,7 @@ class StreamDigitizingTool(QgsMapTool):
 
 
     def finish_digitizing(self):
+        """Finish digitizing a polygon."""
         if not self.stream_points:
             return
 
@@ -113,6 +143,12 @@ class StreamDigitizingTool(QgsMapTool):
 
 
     def add_point(self, event):
+        """Add a point to the rubber band.
+        If the canvas is in a different CRS compared to the layer, then reproject the point.
+
+        :param event: The mouse event object containing details about the button press interaction on the map canvas
+        :type event: QgsMapMouseEvent
+        """
         point = self.toMapCoordinates(event.pos())
         self.rubber_band.addPoint(point, True)
         self.rubber_band.show()
@@ -140,6 +176,14 @@ class StreamDigitizingTool(QgsMapTool):
 
 
     def save_feature(self, attributes):
+        """Saves the drawn polygon or point to the layer.
+        Loop thorough pending features and add them to the layer.
+        Check if a feature has geometry. If not, log a warning message to the Message Bar.
+        Reset the arrays and rubber bands such that the drawn polygons/points are also not shown along with the saved features.
+
+        :param attributes: Dictionary of attributes to add to the feature.
+        :type attributes: dict
+        """
         if self.layer_type != 'points':
             self.populate_feature_for_polygon()
         if not self.pending_features:
@@ -166,7 +210,7 @@ class StreamDigitizingTool(QgsMapTool):
 
 
     def remove_feature(self):
-        QgsApplication.messageLog().logMessage(f'layer_type: {self.layer_type}', 'DigitalSketchPlugin')
+        """Remove the last unsaved feature from the list and reset the rubber band."""
         if self.layer_type == 'points':
             if len(self.pending_features) > 0:
                 self.pending_features.pop()

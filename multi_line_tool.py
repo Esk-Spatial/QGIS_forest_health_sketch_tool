@@ -28,20 +28,32 @@ class MultiLineDigitizingTool(QgsMapTool):
         self.rubber_band.setWidth(4)
 
     def canvasPressEvent(self, event):
-        """Start a new line segment on stylus down"""
+        """Start a new line segment on stylus down
+
+        :param event: The mouse event object containing details about the button press interaction on the map canvas
+        :type event: QgsMapMouseEvent
+        """
         if event.button() == Qt.LeftButton:
             self.stylus_down = True
             self.current_line = [self.toMapCoordinates(event.pos())]  # Start a new line
 
     def canvasMoveEvent(self, event):
-        """Continue adding points to the current line"""
+        """Continue adding points to the current line
+
+        :param event: The mouse event object containing details about the movement interaction on the map canvas
+        :type event: QgsMapMouseEvent
+        """
         if self.stylus_down:
             point = self.toMapCoordinates(event.pos())
             self.current_line.append(point)
             self.update_rubber_band()
 
     def canvasReleaseEvent(self, event):
-        """Store the completed line segment on stylus up"""
+        """Store the completed line segment on stylus up
+
+        :param event: The mouse event object containing details about the mouse button release interaction on the map canvas
+        :type event: QgsMapMouseEvent
+        """
         if event.button() == Qt.LeftButton:
             self.stylus_down = False
             if len(self.current_line) > 1:  # Ensure it's a valid line
@@ -58,12 +70,18 @@ class MultiLineDigitizingTool(QgsMapTool):
         self.rubber_band.setToGeometry(QgsGeometry(multi_line), None)
 
     def features_to_save(self):
-        """Checks if there are any lines to save"""
+        """Checks if there are any lines to save
+
+        :return: True if there are lines to save, False otherwise
+        """
         return len(self.multi_line_segments) > 0
 
 
     def save_feature(self, attributes):
-        """Saves the drawn MultiLineString to the layer"""
+        """Saves the drawn MultiLineString to the layer.
+        If the map CRS is different to the layer, then reproject the geometry.
+        If the layer is not editable, make the layer editable if there is a valid feature to save, then commit the changes.
+        """
         if not self.multi_line_segments:
             return
 
@@ -93,6 +111,10 @@ class MultiLineDigitizingTool(QgsMapTool):
         self.rubber_band.reset(QgsWkbTypes.LineGeometry)
 
     def get_multiline_string(self):
+        """Converts the list of line segments to a QgsMultiLineString
+
+        :return: QgsMultiLineString
+        """
         multi_line = QgsMultiLineString()
         for line in self.multi_line_segments:
             multi_line.addGeometry(QgsLineString(line))
@@ -100,5 +122,6 @@ class MultiLineDigitizingTool(QgsMapTool):
         return multi_line
 
     def remove_feature(self):
+        """Remove the last unsaved line segment from the list and reset the rubber band."""
         self.multi_line_segments = []
         self.rubber_band.reset(QgsWkbTypes.LineGeometry)

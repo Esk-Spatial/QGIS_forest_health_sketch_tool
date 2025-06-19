@@ -2,7 +2,7 @@ import os
 import sqlite3
 
 
-# Your category data
+# Default Keypad Data
 data = [
     {"category": "BMAD", "selected": False, "colour": "#FFC0CB", "items": ["Discolour", "BMAD_L", "BMAD_M", "BMAD_H", "Stags", "Other"]},
     {"category": "EUCS", "selected": False, "colour": "#00FF00", "items": ["Creiis_", "Discolour_", "Defol_", "KLD_", "MLD_", "BMAD_", "QSB_", "WinterBB_"]},
@@ -23,13 +23,21 @@ data = [
 
 class DbInit:
     def __init__(self, db_path):
+        """Constructor.
+
+        :param db_path: Path to the database file.
+        :type db_path: str
+        """
         self.db_path = db_path
         data_dir = os.path.dirname(__file__)
         os.makedirs(data_dir, exist_ok=True)
 
 
     def init_db(self):
-        # Step 3: Create and populate database
+        """Initialize the database.
+        Create the Categories and Items tables and populate them with the data.
+        """
+        # Step 3: Create and populate a database
         conn = sqlite3.connect(self.db_path)
         cur = conn.cursor()
 

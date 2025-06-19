@@ -33,6 +33,7 @@ from qgis.core import (QgsApplication, QgsCoordinateReferenceSystem, QgsVectorLa
 from datetime import datetime
 
 from custom_zoom_tool import CustomZoomTool
+from help import HelpDialog
 from helper import (create_geopackage_file, split_array_to_chunks, adjust_color, show_delete_confirmation,
                     get_existing_layers, get_bing_layer, get_existing_enabled_layers, get_default_button_height,
                     get_default_button_width, get_default_button_font, get_default_button_font_colour,
@@ -86,7 +87,6 @@ def apply_symbology(layer, iface):
 
 def delete_keypad_items(attr_box)    :
     if not attr_box.isEmpty():
-        QgsApplication.messageLog().logMessage('Need to remove', 'DigitalSketchPlugin')
         count = attr_box.count()
         if count > 0 and attr_box.itemAt(count - 1).spacerItem() is not None:
             attr_box.takeAt(count - 1)  # Remove the existing spacer
@@ -95,6 +95,10 @@ def delete_keypad_items(attr_box)    :
             widget = item.widget()
             if widget is not None:
                 widget.deleteLater()
+
+
+def load_help():
+    HelpDialog().exec_()
 
 
 class DigitalSketchMappingTool:
@@ -283,17 +287,9 @@ class DigitalSketchMappingTool:
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
-        settings = QSettings()
         self.init_database_if_not_exists()
-        attr_value = str(settings.value("qgis/digitizing/disable_enter_attribute_values_dialog", "false")).lower()
-        QgsApplication.messageLog().logMessage(f'attr_value: {attr_value}.', "DigitalSketchPlugin")
-        QgsApplication.messageLog().logMessage(f'settings: {settings.fileName()}.', "DigitalSketchPlugin")
-        if attr_value == 'false':
-            QgsApplication.messageLog().logMessage("updating to true", 'DigitalSketchPlugin')
 
-        icon_path = ':/plugins/digital_sketch_mapping_tool/icons/icon.png'
-
-        QgsApplication.messageLog().logMessage(f"icon_path {icon_path}", 'DigitalSketchPlugin')
+        icon_path = ':/plugins/digital_sketch_mapping_tool/icon.png'
 
         action = self.add_action(
             icon_path,
@@ -303,6 +299,16 @@ class DigitalSketchMappingTool:
 
         self.actions.append(action)
         self.toolbar.addAction(action)
+
+        help_btn_path = ':/plugins/digital_sketch_mapping_tool/help-icon.png'
+        help_action = self.add_action(
+            help_btn_path,
+            text=self.tr(u'Sketch Tool Help'),
+            callback=load_help,
+            parent=self.iface.mainWindow())
+
+        self.actions.append(help_action)
+        self.toolbar.addAction(help_action)
 
         """Setting up the listeners/signals for the main docked widget:
                 Button click listeners
@@ -318,17 +324,11 @@ class DigitalSketchMappingTool:
         self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
         self.digital_sketch_widget.deletePushButton.clicked.connect(self.remove_feature)
         self.digital_sketch_widget.centerAndRotatePushButton.clicked.connect(self.center_and_rotate_map)
-
         self.digital_sketch_widget.codeLineEdit.textEdited.connect(self.code_text_changed)
         self.digital_sketch_widget.codeLineEdit.editingFinished.connect(self.code_text_changed_finished)
-
-        self.digital_sketch_widget.linePushButton.clicked.connect(
-            lambda: self.setup_digitizing(self.line_layer, 'lines'))
-        self.digital_sketch_widget.pointPushButton.clicked.connect(
-            lambda: self.setup_digitizing(self.point_layer, 'points'))
-        self.digital_sketch_widget.polygonPushButton.clicked.connect(
-            lambda: self.setup_digitizing(self.polygon_layer, 'polygons'))
-
+        self.digital_sketch_widget.linePushButton.clicked.connect(self.start_line_digitizing)
+        self.digital_sketch_widget.pointPushButton.clicked.connect(self.start_point_digitizing)
+        self.digital_sketch_widget.polygonPushButton.clicked.connect(self.start_polygon_digitizing)
         self.digital_sketch_widget.autoUpdateSlider.valueChanged.connect(self.auto_update_toggled)
 
         QgsProject.instance().layerRemoved.connect(self.layer_removed)
@@ -357,7 +357,7 @@ class DigitalSketchMappingTool:
         self.gps_connection.positionChanged.connect(self.rotate_and_recenter_with_a_buffer)
 
 
-    def rotate_and_recenter_with_a_buffer(self, position, auto_rotate=False, recenter=False):
+    def rotate_and_recenter_with_a_buffer(self, position, auto_rotate=False):
         """Gets the current bearing from the connections and if the bearing value is not null:
         get the bearing and set it by convert it to mathematical rotation
         convert the position to device space coordinate to set the buffer
@@ -367,9 +367,6 @@ class DigitalSketchMappingTool:
 
         :param auto_rotate: boolean value to indicate if the map should be rotated automatically
         :type auto_rotate: bool
-
-        :param recenter: boolean value to indicate if the buffer should be set
-        :Type recenter: bool
         """
         bearing_val = self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Bearing)
 
@@ -388,7 +385,6 @@ class DigitalSketchMappingTool:
         rotation = (360 - bearing_val) % 360
 
         if self.previous_bearing is None or not auto_rotate:
-            QgsApplication.messageLog().logMessage(f"previous bearing is none and {auto_rotate} {self.previous_bearing is None or not auto_rotate}", "DigitalSketchPlugin")
             self.canvas.setRotation(rotation)
             self.previous_bearing = rotation
 
@@ -405,11 +401,6 @@ class DigitalSketchMappingTool:
             transformer = QgsCoordinateTransform(QgsCoordinateReferenceSystem("EPSG:4326"), map_crs,
                                                  QgsProject.instance())
             gps_point_map = transformer.transform(gps_point)
-
-        if recenter:
-            self.canvas.setCenter(gps_point_map)
-            self.canvas.refresh()
-            return
 
         """Getting the position of the GPS in respective of the device coordinates.
             setting the offset using the canvas height
@@ -535,7 +526,6 @@ class DigitalSketchMappingTool:
         bing_layer = QgsRasterLayer(xyz_uri, self.bing_layer_name, "wms")
 
         if not bing_layer.isValid():
-            QgsApplication.messageLog().logMessage("Failed to load Bing Maps layer.", "DigitalSketchPlugin")
             return
 
         QgsProject.instance().addMapLayer(bing_layer, False)
@@ -596,6 +586,24 @@ class DigitalSketchMappingTool:
         self.update_code_line_edit(self.feature_string)
 
 
+    def start_line_digitizing(self):
+        """Called when the line button is clicked from the dock widget
+        This function calls the setup digitizing function by passing line layers"""
+        self.setup_digitizing(self.line_layer, 'lines')
+
+
+    def start_point_digitizing(self):
+        """Called when the point button is clicked from the dock widget
+        This function calls the setup digitizing function by passing point layers"""
+        self.setup_digitizing(self.point_layer, 'points')
+
+
+    def start_polygon_digitizing(self):
+        """Called when the polygon button is clicked from the dock widget
+        This function calls the setup digitizing function by passing ploygon layers"""
+        self.setup_digitizing(self.polygon_layer, 'polygons')
+
+
     def setup_digitizing(self, layer, layer_type):
         """Setup digitizing mode with automated attribute handling
         Check if layers are defined and if not, show a critical error message on the Error message bar.
@@ -613,9 +621,16 @@ class DigitalSketchMappingTool:
             self.check_for_current_selection()
             return
 
+        """If the digitizing tool is set i.e. another layer is editable.
+        Check if there are any pending features that needs to be saved then save the layer.
+        If not loop through the layers and commit changes such that only one layer would be editable.
+        Remove the current digitizing tool from the map canvas.
+        """
         if self.digitizing_tool is not None:
             if self.digitizing_tool.features_to_save():
                 self.save_layers(False)
+            else:
+                self.iterate_and_commit_layers(False)
             self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
 
 
@@ -643,7 +658,7 @@ class DigitalSketchMappingTool:
 
     def auto_update_toggled(self, value):
         """Handle the auto-update toggled event.
-        If auto update is toggled then the map will be rotated and centered automatically.
+        If the auto-update is toggled, then the map will be rotated and centered automatically.
         Else, disable auto update and if there is timer set up stop it.
 
         :param value: Boolean value of the toggled event
@@ -667,52 +682,63 @@ class DigitalSketchMappingTool:
         Convert the interval from seconds to milliseconds and set the auto-update timer.
         """
 
-        connections = QgsApplication.gpsConnectionRegistry().connectionList()
-        if not connections or len(connections) == 0:
-            self.auto_update_position_error()
+        self.gps_connection = self.check_for_gps_connection()
+
+        if self.gps_connection is None:
             return
 
-        self.gps_connection = connections[0]
         interval = self.attributes["update_interval"] if self.attributes is not None else get_default_auto_update_interval()
         self.auto_update_Timer = QTimer()
         self.auto_update_Timer.timeout.connect(self.get_gps_data)
         self.auto_update_Timer.start(interval * 1000)
 
 
-    def get_gps_data(self, auto_rotate=True, recenter=False):
+    def check_for_gps_connection(self):
+        """Check if there is a GPS connection"""
+        connections = QgsApplication.gpsConnectionRegistry().connectionList()
+        if not connections or len(connections) == 0:
+            self.auto_update_position_error()
+            return None
+
+        return connections[0]
+
+
+    def get_gps_data(self, auto_rotate=True, done_digitizing=False):
         """Get the Position data from the GPS Connection.
         Call the rotate_and_recenter_with_a_buffer method to update the map.
 
         :param auto_rotate: Boolean value to indicate if its called
         :type auto_rotate: bool
 
-        :param recenter: Boolean value to indicate if the map should be re-centered
-        :type recenter: bool
+        :param done_digitizing: Boolean value to indicate if the method is called after digitizing
+        :type done_digitizing: bool
         """
-        if self.auto_update_disabled:
+        if self.auto_update_disabled and not done_digitizing:
+            return
+
+        self.gps_connection = self.check_for_gps_connection()
+
+        if self.gps_connection is None:
             return
 
         position = self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Location)
 
-        if position is None and not recenter:
-            self.auto_update_position_error(recenter)
+        if position is None:
+            self.auto_update_position_error()
             return
 
-        self.rotate_and_recenter_with_a_buffer(position, auto_rotate, recenter)
+        self.rotate_and_recenter_with_a_buffer(position, auto_rotate)
 
 
-    def auto_update_position_error(self, recenter=False, show_message=True):
+    def auto_update_position_error(self, show_message=True):
         """Display check GPS Connection Error message.
-
-        :param recenter: Boolean value to indicate if the map should be recentered (triggered via Done)
-        :type recenter: bool
 
         :param show_message: Boolean value to indicate if a message should be shown on the Error message bar
         :type show_message: bool
         """
-        if not recenter:
-            self.auto_update_enabled = False
-            self.digital_sketch_widget.autoUpdateSlider.setSliderPosition(0)
+        self.auto_update_enabled = False
+        self.digital_sketch_widget.autoUpdateSlider.setSliderPosition(0)
+
         if show_message:
             self.iface.messageBar().pushMessage("Info", "Check GPS Connection.", level=Qgis.Warning, duration=5)
 
@@ -746,12 +772,23 @@ class DigitalSketchMappingTool:
             self.done_digitizing()
 
         if show_message:
-            self.change_gps_settings(False)
+            self.change_gps_settings(True)
             self.check_for_current_selection()
 
         if self.auto_update_enabled:
             self.update_auto_update_disabled_flag(False)
+            self.change_gps_settings(True)
 
+        self.iterate_and_commit_layers(show_message)
+
+
+    def iterate_and_commit_layers(self, show_message):
+        """This function will iterate over sketch layers and see if they are editable if so commit changes.
+        If show_message is True, then will show a success message on the Message Bar
+
+        :param show_message: Should the commit changes message be shown or not.
+        :type show_message: bool
+        """
         layers = [
             (self.point_layer, "Point"),
             (self.line_layer, "Line"),
@@ -760,11 +797,10 @@ class DigitalSketchMappingTool:
 
         for layer, name in layers:
             if layer.isEditable():
-                QgsApplication.messageLog().logMessage(f"{name} layer is editable", 'DigitalSketchPlugin')
                 layer.commitChanges()  # Save the changes
                 if show_message:
                     self.iface.messageBar().pushMessage("Success", f"Changes committed successfully to {name} layer!",
-                                                    level=Qgis.Success)
+                                                        level=Qgis.Success)
 
 
     def layer_removed(self, layer_id):
@@ -977,7 +1013,6 @@ class DigitalSketchMappingTool:
             if len(self.created_layers_stack) == 0:
                 return
 
-            QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
             last_index = len(self.created_layers_stack)-1
             last_layer = self.created_layers_stack[last_index]
             layer_type = last_layer["type"]
@@ -985,7 +1020,6 @@ class DigitalSketchMappingTool:
             layer_code = last_layer["code"]
             if show_delete_confirmation(f'most recent feature?\n(Layer: {layer_type} Code: {layer_code})') == QDialog.Accepted:
                 self.created_layers_stack.pop()
-                QgsApplication.messageLog().logMessage(f"{self.created_layers_stack}", 'DigitalSketchPlugin')
             else:
                 return
 
@@ -1065,6 +1099,7 @@ class DigitalSketchMappingTool:
 
 
     def reset_selection_digitize_tool(self):
+        """This clears the feature selection and if the digitize tool is set remove it from the map."""
         self.selected_attribute = None
         self.highlight = None
         self.vertex_marker = None
@@ -1108,12 +1143,9 @@ class DigitalSketchMappingTool:
         :param project_name: Name of the project
         :type project_name: str
         """
-        QgsApplication.messageLog().logMessage('creating new gpkg file', 'DigitalSketchPlugin')
         date_time_str = datetime.now().strftime("%d-%m-%Y_%I-%M-%p")
         gpkg_file_name = f"{project_name}_{date_time_str}.gpkg"
         gpkg_file_name = os.path.join(self.folder_location, gpkg_file_name)
-        QgsApplication.messageLog().logMessage(f'file name: {gpkg_file_name} file path: {gpkg_file_name}',
-                                               'DigitalSketchPlugin')
 
         self.project_crs = str(self.canvas.mapSettings().destinationCrs().toProj())
         if self.project_crs is None:
@@ -1187,6 +1219,7 @@ class DigitalSketchMappingTool:
         widget.setMinimumHeight(height + 1)
         widget.setMaximumHeight(height + 1)
 
+        # generate keypad items from the selected category.
         for i in items:
             light_colour = adjust_color(i["colour"], 30)
             btn = QPushButton(i["item"])
@@ -1256,6 +1289,7 @@ class DigitalSketchMappingTool:
 
 
     def update_selected_layer_style(self):
+        """Updated the selected features layer style"""
         layer_type = self.selected_attribute["type"]
 
         layer = None
@@ -1278,9 +1312,8 @@ class DigitalSketchMappingTool:
         self.auto_update_disabled = state
         self.digital_sketch_widget.autoUpdateSlider.setDisabled(state)
 
-
     def onClosePlugin(self):
-        """Cleanup necessary items here when plugin dockwidget is closed"""
+        """Cleanup the necessary items here when plugin dockwidget is closed"""
 
         #print "** CLOSING DigitalSketchMappingTool"
 

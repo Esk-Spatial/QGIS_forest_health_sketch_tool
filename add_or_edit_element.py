@@ -10,7 +10,16 @@ FORM_CLASS, _ = uic.loadUiType(os.path.join(os.path.dirname(__file__), "add_or_e
 
 class AddOrEditElement(QDialog, FORM_CLASS):
     def __init__(self, item=None, parent=None):
+        """Constructor.
+
+        :param item: KeypadItem object
+        :type item: KeypadItem, optional
+
+        :param parent: Parent widget
+        :type parent: QWidget, optional
+        """
         super(AddOrEditElement, self).__init__(parent)
+        # Set up UI elements and set up button clicked signals
         self.item = item if item is not None else KeypadItem(0, "")
         self.setupUi(self)
 
@@ -19,14 +28,17 @@ class AddOrEditElement(QDialog, FORM_CLASS):
         self.discardPushButton.clicked.connect(self.discard_changes)
 
     def apply_changes(self):
-        QgsApplication.messageLog().logMessage("apply_changes", 'DigitalSketchPlugin')
+        """Apply the changes to the KeypadItem object. This function is triggered when the apply, button is clicked."""
         self.item.item = self.elementLineEdit.text()
         self.accept()
 
     def discard_changes(self):
-        QgsApplication.messageLog().logMessage("discard_changes", 'DigitalSketchPlugin')
+        """Discard the changes to the KeypadItem object. This function is triggered when the discard, button is clicked."""
         self.reject()
 
     def get_item(self):
-        # return {"item_id": self.item.item_id, "item": self.item.item}
+        """Get the KeypadItem object.
+
+        :return: KeypadItem object
+        """
         return self.item

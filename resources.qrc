@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/plugins/digital_sketch_mapping_tool" >
-        <file>icons/icon.png</file>
+        <file>icon.png</file>
+        <file>help-icon.png</file>
     </qresource>
 </RCC>
