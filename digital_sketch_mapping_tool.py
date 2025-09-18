@@ -498,6 +498,7 @@ class DigitalSketchMappingTool:
 
         self.folder_location = folder
         self.folder_location_set = True
+        self.enable_log_to_file()
         if self.attributes['add_bing_imagery']:
             self.load_bing_maps()
         self.create_geopackage_file(self.attributes['project_name'])
@@ -856,6 +857,25 @@ class DigitalSketchMappingTool:
         if self.attributes is not None:
             self.attributes["use_existing"] = False
         self.open_settings(True)
+
+
+    def enable_log_to_file(self):
+        gps = self.iface.mainWindow().findChild(QWidget, 'QgsGpsInformationWidgetBase')
+        popup_btn = gps.findChild(QToolButton, "mBtnPopupOptions")
+
+        if not popup_btn:
+            return
+
+        btn_menu = popup_btn.menu()
+        log_to_file = next(
+            (action for action in btn_menu.findChildren(QAction)
+             if action.text() == 'Log to GeoPackage/Spatialite…'),
+            None
+        )
+
+        if log_to_file:
+            QgsApplication.messageLog().logMessage(f"log_to_file: {log_to_file}", "DigitalSketchPlugin")
+            log_to_file.setChecked(True)
 
 
     def change_gps_settings(self, start_digitizing):
