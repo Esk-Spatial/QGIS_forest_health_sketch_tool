@@ -43,9 +43,12 @@
        <property name="autoFormatting">
         <set>QTextEdit::AutoAll</set>
        </property>
+       <property name="readOnly">
+        <bool>true</bool>
+       </property>
        <property name="source">
         <url>
-         <string>file:///Users/sakna/Library/Application Support/QGIS/QGIS3/profiles/default/python/plugins/digital_sketch_mapping_tool/help/help.html</string>
+         <string/>
         </url>
        </property>
       </widget>

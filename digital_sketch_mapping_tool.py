@@ -873,8 +873,8 @@ class DigitalSketchMappingTool:
             None
         )
 
-        if log_to_file:
-            QgsApplication.messageLog().logMessage(f"log_to_file: {log_to_file}", "DigitalSketchPlugin")
+        if log_to_file and not log_to_file.isChecked():
+            QgsApplication.messageLog().logMessage(f"log_to_file: {log_to_file.isChecked()}", "DigitalSketchPlugin")
             log_to_file.setChecked(True)
 
 
@@ -1176,9 +1176,9 @@ class DigitalSketchMappingTool:
         if not self.geopackage_created:
             return
 
-        self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-points", f"{project_name}-sketch-points", "ogr")
-        self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-lines", f"{project_name}-sketch-lines", "ogr")
-        self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-polygons", f"{project_name}-sketch-polygons", "ogr")
+        self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch_points", f"{project_name}_sketch_points", "ogr")
+        self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch_lines", f"{project_name}_sketch_lines", "ogr")
+        self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch_polygons", f"{project_name}_sketch_polygons", "ogr")
         self.sketch_layers_set = True
         QgsProject.instance().addMapLayer(self.polygon_layer)
         QgsProject.instance().addMapLayer(self.line_layer)
