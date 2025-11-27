@@ -1,13 +1,5 @@
 Plugin Builder Results
 
-Your plugin DigitalSketchMappingTool was created in:
-    C:/Users/sakna.hewagalamulage/AppData/Roaming/QGIS/QGIS3/profiles/default/python/plugins\digital_sketch_mapping_tool
-
-Your QGIS plugin directory is located at:
-    C:/Users/sakna.hewagalamulage/AppData/Roaming/QGIS/QGIS3/profiles/default/python/plugins
-
-What's Next:
-
   * Copy the entire directory containing your new plugin to the QGIS plugin
     directory
 
