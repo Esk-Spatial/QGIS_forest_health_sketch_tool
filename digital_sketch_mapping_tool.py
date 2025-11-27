@@ -21,16 +21,32 @@
  *                                                                         *
  ***************************************************************************/
 """
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QVariant
-from qgis.PyQt.QtGui import QIcon, QColor
-from qgis.PyQt.QtWidgets import QAction, QFileDialog, QMessageBox, QPushButton, QVBoxLayout, QFileDialog, QDialog, QWidget, QHBoxLayout
-from qgis.core import QgsApplication, QgsFields, QgsCoordinateReferenceSystem, QgsVectorFileWriter, QgsWkbTypes, QgsVectorLayer, QgsProject, QgsRasterLayer, QgsPointXY, QgsCoordinateTransform, QgsRectangle, QgsField
-from datetime import datetime
-from helper import create_geopackage_file
-from qgis.core import QgsSettings, QgsExpression, QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer, QgsPalLayerSettings, QgsVectorLayerSimpleLabeling, Qgis
-from PyQt5.QtWidgets import QWidgetAction, QToolButton
+from collections import deque
 
+from PyQt5.QtWidgets import QRadioButton
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, Qt, QMargins, QTimer
+from qgis.PyQt.QtGui import QIcon, QColor
+from qgis.PyQt.QtWidgets import (QAction, QPushButton, QDialog, QWidget, QHBoxLayout,
+                                 QSpacerItem, QSizePolicy, QToolButton)
+from qgis.core import (QgsApplication, QgsCoordinateReferenceSystem, QgsVectorLayer,
+                       QgsProject, QgsRasterLayer, QgsPointXY, QgsCoordinateTransform, QgsRectangle)
+from datetime import datetime
+
+from custom_zoom_tool import CustomZoomTool
+from help import HelpDialog
+from helper import (create_geopackage_file, split_array_to_chunks, adjust_color, show_delete_confirmation,
+                    get_existing_layers, get_bing_layer, get_existing_enabled_layers, get_default_button_height,
+                    get_default_button_width, get_default_button_font, get_default_button_font_colour,
+                    get_default_auto_update_interval)
+
+from qgis.core import (QgsSymbol, QgsRendererCategory, QgsCategorizedSymbolRenderer,
+                       Qgis, QgsCoordinateReferenceSystem)
+
+from data.db_init import DbInit
+from select_existing_layer import SelectExistingLayerDialog
 from stream_digitizing_tool import StreamDigitizingTool
+from multi_line_tool import MultiLineDigitizingTool
+from feature_identify_tool import FeatureIdentifyTool
 from .app_settings import AppSettingsDialog
 from keypad_manager import KeypadManager
 
@@ -40,15 +56,13 @@ from .resources import *
 # Import the code for the DockWidget
 from .digital_sketch_mapping_tool_dockwidget import DigitalSketchMappingToolDockWidget
 import os.path
+
 try:
     from osgeo import ogr
 except ImportError:
     import ogr
 
-fields_dicts = [{"name": "color", "ogr_type": ogr.OFTString, "width": 20},
-                {"name": "note", "ogr_type": ogr.OFTString, "width": 150}]
-
-_plugin_name_ = "app_tester"
+_plugin_name_ = "digital_sketch_mapping_tool"
 _plugin_directory_ = os.path.dirname(__file__)
 
 def apply_symbology(layer, iface):
@@ -67,14 +81,24 @@ def apply_symbology(layer, iface):
 
     renderer = QgsCategorizedSymbolRenderer("colour", categories)
     layer.setRenderer(renderer)
-
-    label_settings = QgsPalLayerSettings()
-    label_settings.fieldName = "label"
-    label_settings.enabled = True
-    layer.setLabeling(QgsVectorLayerSimpleLabeling(label_settings))
-
     layer.triggerRepaint()
     iface.mapCanvas().refresh()
+
+
+def delete_keypad_items(attr_box)    :
+    if not attr_box.isEmpty():
+        count = attr_box.count()
+        if count > 0 and attr_box.itemAt(count - 1).spacerItem() is not None:
+            attr_box.takeAt(count - 1)  # Remove the existing spacer
+        while attr_box.count():
+            item = attr_box.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+
+def load_help():
+    HelpDialog().exec_()
 
 
 class DigitalSketchMappingTool:
@@ -88,33 +112,67 @@ class DigitalSketchMappingTool:
             application at run time.
         :type iface: QgsInterface
         """
-        # Save reference to the QGIS interface
-        self.digitizing_tool = None
+        # initialize plugin directory
+        self.plugin_dir = os.path.dirname(__file__)
+
+        # defining and initialising global variables/placeholders for the application
         self.iface = iface
+        self.actions = []
+        self.created_layers_stack = deque()
+        self.digitizing_tool = None
         self.canvas = self.iface.mapCanvas()
         self.folder_location = None
+        self.geopackage_created = None
         self.feature_string = ""
-        self.selected_colour = "#ffff00"
+        self.selected_colour = "#7a3dc617"
+        self.folder_location_set = False
+        self.use_existing = False
         self.point_layer = None
         self.line_layer = None
         self.polygon_layer = None
         self.plugin_name = _plugin_name_
         self.keypad_manager = KeypadManager()
-
+        self.pressed_btn = None
+        self.attributes = None
+        self.layers_saved = 0
+        self.selected_attribute = None
+        self.highlight = None
+        self.vertex_marker = None
+        self.zoom_factor = 2
+        self.zoom_tool = CustomZoomTool(self.iface, self.zoom_factor)
+        self.multiline_tool = None
+        self.polygon_tool = None
+        self.point_tool = None
+        self.point_style = os.path.join(self.plugin_dir, "styles", "geolink_points_010525.qml")
+        self.polygon_style = os.path.join(self.plugin_dir, "styles", "geolink_polygons_010525.qml")
+        self.line_style = os.path.join(self.plugin_dir, "styles", "geolink_lines_010525.qml")
+        self.clicked_buttons = set()
+        self.text_changed = False
+        self.project_crs = None
+        self.feature_identify_tool = FeatureIdentifyTool(self.iface, self)
         self.bing_maps_url = (
             "https://t0.tiles.virtualearth.net/tiles/a{q}.jpeg?g=685&mkt=en-us&n=z"
         )
         self.bing_layer_name = "Bing Satellite Imagery"
+        self.db_path = os.path.join(self.plugin_dir, "data", "keypad_data.sqlite")
+        self.db_initializer = DbInit(self.db_path)
+        self.new_project_removing_existing = False
+        self.sketch_layers_set = False
+        self.layers_to_be_added = None
+        self.gps_connection = None
+        self.rotate_on_gps_before_digitising = None
+        self.auto_update_Timer = None
+        self.auto_update_enabled = False
+        self.auto_update_disabled = False
+        self.previous_bearing = None
+        self.bearing_delta = 5
 
-        # Location coordinates (longitude, latitude)
-        self.location_lon = 151.2093
-        self.location_lat = -33.8688
+        self.iface.newProjectCreated.connect(self.on_new_project_created)
+        self.iface.projectRead.connect(self.on_new_project_loaded)
 
-        # initialize plugin directory
-        self.plugin_dir = os.path.dirname(__file__)
-
-        # initialize locale
-        locale = QSettings().value('locale/userLocale')[0:2]
+        # initialize locale variables
+        locale_value = QSettings().value('locale/userLocale')
+        locale = locale_value[0:2] if locale_value else 'en'
         locale_path = os.path.join(
             self.plugin_dir,
             'i18n',
@@ -128,14 +186,12 @@ class DigitalSketchMappingTool:
         # Declare instance attributes
         self.actions = []
         self.menu = self.tr(u'&Digital Sketch Mapping Tool')
-        # TODO: We are going to let the user set this up in a future iteration
         self.toolbar = self.iface.addToolBar(u'DigitalSketchMappingTool')
         self.toolbar.setObjectName(u'DigitalSketchMappingTool')
 
-        #print "** INITIALIZING DigitalSketchMappingTool"
-
         self.pluginIsActive = False
         self.digital_sketch_widget = DigitalSketchMappingToolDockWidget()
+        self.digital_sketch_widget.visibilityChanged.connect(self.widget_opened)
 
 
     # noinspection PyMethodMayBeStatic
@@ -231,349 +287,1053 @@ class DigitalSketchMappingTool:
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
-        settings = QSettings()
+        self.init_database_if_not_exists()
 
-        attr_value = str(settings.value("qgis/digitizing/disable_enter_attribute_values_dialog", "false")).lower()
-        QgsApplication.messageLog().logMessage(f'attr_value: {attr_value}.', "DigitalSketchPlugin")
-        QgsApplication.messageLog().logMessage(f'settings: {settings.fileName()}.', "DigitalSketchPlugin")
-        if attr_value == 'false':
-            QgsApplication.messageLog().logMessage("updating to true", 'DigitalSketchPlugin')
+        icon_path = ':/plugins/digital_sketch_mapping_tool/icon.png'
 
-        icon_path = ':/plugins/digital_sketch_mapping_tool/icons/icon.png'
-
-        QgsApplication.messageLog().logMessage(f"icon_path {icon_path}", 'DigitalSketchPlugin')
-
-        self.add_action(
+        action = self.add_action(
             icon_path,
             text=self.tr(u'Digital sketch mapping tool'),
             callback=self.run,
             parent=self.iface.mainWindow())
 
-        self.check_and_get_folder()
-        self.digital_sketch_widget.setFolderPushButton.clicked.connect(self.__set_folder_location)
-        self.digital_sketch_widget.mColorButton.colorChanged.connect(self.__colour_changed)
-        self.digital_sketch_widget.savePushButton.clicked.connect(self.save_layers)
+        self.actions.append(action)
+        self.toolbar.addAction(action)
+
+        help_btn_path = ':/plugins/digital_sketch_mapping_tool/help-icon.png'
+        help_action = self.add_action(
+            help_btn_path,
+            text=self.tr(u'Sketch Tool Help'),
+            callback=load_help,
+            parent=self.iface.mainWindow())
+
+        self.actions.append(help_action)
+        self.toolbar.addAction(help_action)
+
+        """Setting up the listeners/signals for the main docked widget:
+                Button click listeners
+                Code Line text changed manually
+                Layer removed from the project
+        """
+        self.digital_sketch_widget.zoomInPushButton.clicked.connect(lambda: self.zoom_to_map(True))
+        self.digital_sketch_widget.zoomOutPushButton.clicked.connect(lambda: self.zoom_to_map(False))
+
+        self.digital_sketch_widget.saveAndPanPushButton.clicked.connect(self.save_and_pan)
+        self.digital_sketch_widget.selectPushButton.clicked.connect(self.setup_feature_identify_tool)
         self.digital_sketch_widget.settingPushButton.clicked.connect(self.open_settings)
+        self.digital_sketch_widget.donePushButton.clicked.connect(self.done_digitizing)
+        self.digital_sketch_widget.deletePushButton.clicked.connect(self.remove_feature)
+        self.digital_sketch_widget.centerAndRotatePushButton.clicked.connect(self.center_and_rotate_map)
+        self.digital_sketch_widget.codeLineEdit.textEdited.connect(self.code_text_changed)
+        self.digital_sketch_widget.codeLineEdit.editingFinished.connect(self.code_text_changed_finished)
+        self.digital_sketch_widget.linePushButton.clicked.connect(self.start_line_digitizing)
+        self.digital_sketch_widget.pointPushButton.clicked.connect(self.start_point_digitizing)
+        self.digital_sketch_widget.polygonPushButton.clicked.connect(self.start_polygon_digitizing)
+        self.digital_sketch_widget.autoUpdateSlider.valueChanged.connect(self.auto_update_toggled)
 
-        self.digital_sketch_widget.linePushButton.clicked.connect(lambda: self.setup_digitizing(self.line_layer, 'line'))
-        self.digital_sketch_widget.pointPushButton.clicked.connect(lambda: self.setup_digitizing(self.point_layer, 'point'))
-        self.digital_sketch_widget.polygonPushButton.clicked.connect(
-            lambda: self.setup_digitizing(self.polygon_layer, 'polygon'))
+        QgsProject.instance().layerRemoved.connect(self.layer_removed)
 
-    # --------------------------------------------------------------------------
 
-    def __load_bing_maps(self):
-        # Load Bing Maps XYZ layer
+    def widget_opened(self, visible):
+        """function checks if the dock-widget is visible and layers are not set then check if there are layers loaded.
+
+        :param visible: boolean value of the widget visibility
+        :type visible: bool
+        """
+        if visible and not self.sketch_layers_set:
+            self.check_for_sketch_layers()
+
+
+    def center_and_rotate_map(self):
+        """When Rotate and Center button is clicked this function will be triggered.
+           Checks for GPS connections, If there is a connection, then it would listen to the position changed signal.
+        """
+        connections = QgsApplication.gpsConnectionRegistry().connectionList()
+        if not connections or len(connections) == 0:
+            self.iface.messageBar().pushMessage("Info", "Check GPS Connection.", level=Qgis.Warning, duration=5)
+            return
+
+        self.gps_connection = connections[0]
+        self.gps_connection.positionChanged.connect(self.rotate_and_recenter_with_a_buffer)
+
+
+    def rotate_and_recenter_with_a_buffer(self, position, auto_rotate=False):
+        """Gets the current bearing from the connections and if the bearing value is not null:
+        get the bearing and set it by convert it to mathematical rotation
+        convert the position to device space coordinate to set the buffer
+
+        :param position current position emitted by the GPS
+        :type position: QgsPoint
+
+        :param auto_rotate: boolean value to indicate if the map should be rotated automatically
+        :type auto_rotate: bool
+        """
+        bearing_val = self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Bearing)
+
+        if bearing_val is None:
+            return
+
+        try:
+            self.gps_connection.positionChanged.disconnect(self.rotate_and_recenter_with_a_buffer)
+        except Exception as e:
+            QgsApplication.messageLog().logMessage(f"error: {e}", "DigitalSketchPlugin")
+
+        map_settings = self.canvas.mapSettings()
+        map_crs = map_settings.destinationCrs()
+
+        # get the positive value for the rotation
+        rotation = (360 - bearing_val) % 360
+
+        if self.previous_bearing is None or not auto_rotate:
+            self.canvas.setRotation(rotation)
+            self.previous_bearing = rotation
+
+        elif self.previous_bearing is not None and auto_rotate:
+            delta = abs(self.previous_bearing - rotation)
+            if delta > self.bearing_delta:
+                self.canvas.setRotation(rotation)
+                self.previous_bearing = rotation
+
+        # Get GPS point in map CRS
+        gps_point = QgsPointXY(position.x(), position.y())
+        gps_point_map = gps_point
+        if map_crs.authid() != "EPSG:4326":
+            transformer = QgsCoordinateTransform(QgsCoordinateReferenceSystem("EPSG:4326"), map_crs,
+                                                 QgsProject.instance())
+            gps_point_map = transformer.transform(gps_point)
+
+        """Getting the position of the GPS in respective of the device coordinates.
+            setting the offset using the canvas height
+            updating the vertical position of the screen coordinates
+            getting the world coordinates from the screen coordinates
+        """
+        position_on_screen = self.canvas.getCoordinateTransform().transform(gps_point_map)
+        canvas_height = self.canvas.height()
+        y_offset_in_px = int(canvas_height * 0.3)
+        position_on_screen.setY(position_on_screen.y() - y_offset_in_px)
+        offset_center = self.canvas.getCoordinateTransform().toMapCoordinatesF(position_on_screen.x(), position_on_screen.y())
+
+        self.canvas.setCenter(offset_center)
+        self.canvas.refresh()
+
+
+    def init_database_if_not_exists(self):
+        """check if the SQLite database exists if not create the database"""
+        if os.path.exists(self.db_path):
+            return
+
+        db_init_path = os.path.join(self.plugin_dir, 'data', 'db_init.py')
+        if os.path.exists(db_init_path):
+            self.db_initializer.init_db()
+
+        else:
+            raise FileNotFoundError("data/db_init.py not found to initialize the database.")
+
+
+    def on_new_project_created(self):
+        """When a new project is created, then re-set the attributes.
+        If there are messages on the message bar, clear those
+        """
+        self.project_created_or_loaded()
+        if len(self.iface.messageBar().items()) > 0:
+            for item in self.iface.messageBar().items():
+                self.iface.messageBar().popWidget(item)
+
+
+    def on_new_project_loaded(self):
+        """When a new project is loaded, then re-set the attributes.
+        If the plugin is active, check for existing sketch layers
+        """
+        self.project_created_or_loaded()
+        if self.pluginIsActive:
+            self.check_for_sketch_layers()
+
+
+    def project_created_or_loaded(self):
+        """When a new project is created/loaded, then some of the existing attributes are reset"""
+        self.folder_location_set = False
+        self.use_existing = False
+        if self.attributes is not None:
+            self.attributes["project_changed"] = True
+
+
+    def check_for_sketch_layers(self):
+        """Check if there are any existing sketch layers in the project."""
+        layer_groups = get_existing_enabled_layers()
+        if len(layer_groups['points']) > 0 and len(layer_groups['polygons']) > 0 and len(layer_groups['lines']) > 0:
+            layer_selection = SelectExistingLayerDialog(layer_groups)
+            if layer_selection.exec_() == QDialog.Accepted:
+                self.set_layer_from_existing(layer_selection.get_layer_selection())
+                self.populate_categories()
+
+
+    def remove_layers(self):
+        """Remove existing layers when a new project is created.
+        Disconnect the layer-removed signal to not show error messages on the bar when removing sketch layers.
+        Once the layers are removed, then the signal is re-connected
+        """
+        try:
+            QgsProject.instance().layerRemoved.disconnect(self.layer_removed)
+        except Exception as e:
+            QgsApplication.messageLog().logMessage(f"error: {e}", "DigitalSketchPlugin")
+
+        try:
+            bing_layer = get_bing_layer(self.bing_layer_name)
+            if bool(bing_layer):
+                QgsProject.instance().removeMapLayer(bing_layer.get("l_id"))
+            layers = get_existing_layers()
+            if len(layers) > 0:
+                for l_id in layers:
+                    QgsProject.instance().removeMapLayer(l_id)
+
+        finally:
+            QgsProject.instance().layerRemoved.connect(self.layer_removed)
+
+
+    def set_folder_location(self):
+        """Sets the folder location defined in the setting window and load bing maps if checked"""
+        folder = self.attributes['folder_path']
+        if not folder:
+            return
+
+        self.folder_location = folder
+        self.folder_location_set = True
+        self.enable_log_to_file()
+        if self.attributes['add_bing_imagery']:
+            self.load_bing_maps()
+        self.create_geopackage_file(self.attributes['project_name'])
+        self.zoom_to_location()
+
+
+    def set_layer_from_existing(self, layers):
+        """Sets the sketch layers from existing layers in the project
+
+        :param layers: Dictionary containing the layers from the existing project
+        :type layers: dict
+        """
+        self.use_existing =True
+        self.sketch_layers_set = True
+
+        self.point_layer = layers['points'] if "points" in layers else None
+        self.polygon_layer = layers['polygons'] if "polygons" in layers else None
+        self.line_layer = layers['lines'] if "lines" in layers else None
+
+        self.set_style_and_digitizing_tool()
+
+
+    def load_bing_maps(self):
+        """Load Bing Maps XYZ layer"""
         xyz_uri = f"type=xyz&url={self.bing_maps_url}&zmax=18&zmin=0&http-header:referer="
         bing_layer = QgsRasterLayer(xyz_uri, self.bing_layer_name, "wms")
 
         if not bing_layer.isValid():
-            QgsApplication.messageLog().logMessage("Failed to load Bing Maps layer.", "DigitalSketchPlugin")
             return
 
-        QgsProject.instance().addMapLayer(bing_layer)
-        self.iface.setActiveLayer(bing_layer)
+        QgsProject.instance().addMapLayer(bing_layer, False)
+        QgsProject.instance().layerTreeRoot().addLayer(bing_layer)
 
-    # --------------------------------------------------------------------------
 
-    def __zoom_to_location(self):
-        self.canvas.setDestinationCrs(QgsCoordinateReferenceSystem('EPSG:3857'))
-
-        # Convert location coordinates to Web Mercator
-        location_point = QgsPointXY(self.location_lon, self.location_lat)
-        crs_src = QgsCoordinateReferenceSystem('EPSG:4326')
-        crs_dest = QgsCoordinateReferenceSystem('EPSG:3857')
-        xform = QgsCoordinateTransform(crs_src, crs_dest, QgsProject.instance())
-        location_transformed = xform.transform(location_point)
-
-        # Create an extent centered on location
-        zoom_width = 20000  # meters
-        extent = QgsRectangle(
-            location_transformed.x() - zoom_width,
-            location_transformed.y() - zoom_width,
-            location_transformed.x() + zoom_width,
-            location_transformed.y() + zoom_width
-        )
+    def zoom_to_location(self):
+        """set the zoom/extent to the whole of Australia"""
+        extent = QgsRectangle(112.0, -44.0, 154.0, -10.0)
 
         # Set the extent and refresh
         self.canvas.setExtent(extent)
         self.canvas.refresh()
 
-    # --------------------------------------------------------------------------
 
-    def __set_folder_location(self):
-        folder = self.digital_sketch_widget.folderQgsFileWidget.filePath()
-        QgsApplication.messageLog().logMessage(f'Directory path {folder}.', 'DigitalSketchPlugin')
-        if folder:
-            self.folder_location = folder
-            self.__load_bing_maps()
-            self.__create_gpkg_file()
-            self.__zoom_to_location()
+    def populate_categories(self):
+        """Populate the categories based on the selected keypad categories.
+        Before this, check if there are any existing-selected categories. If so, clear the placeholder variables.
+        Populate the new keypad elements.
+        """
+        if self.feature_string != "":
+            self.clear_current_btn_selection()
+            self.update_code_line_edit("")
 
-    # --------------------------------------------------------------------------
-
-    def __populate_categories(self):
-        categories = self.keypad_manager.get_selected_categories()
+        items = self.keypad_manager.get_checked_category_items()
         attr_box = self.digital_sketch_widget.categoryAttrVerticalLayout
-        if attr_box is not None:
-            QgsApplication.messageLog().logMessage(f'Need to remove elements.', 'DigitalSketchPlugin')
+        delete_keypad_items(attr_box)
 
-        for cat in categories:
-            widget = QWidget()
-            layout = QHBoxLayout()
-            for item in cat.items:
-                btn = QPushButton(item)
-                btn.setMinimumHeight(30)
-                btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {cat.colour};
-                    color: white;
-                    font: bold 11px;
-                    border-radius: 5px;
-                    padding: 5px 10px;
-                    min-height: 30px;
-                }}
-                QPushButton:hover {{
-                    background-color: lighten({cat.colour}, 20%);
-                }}
-                QPushButton:pressed {{
-                    background-color: red !important;
-                    border-style: inset;
-                }}
-                """)
-                layout.addWidget(btn)
-                btn.clicked.connect(lambda checked, btn_name=item: self.__button_clicked(btn_name))
-                layout.setContentsMargins(2, 2, 2, 2)
-                layout.setSpacing(5)
+        if len(items) > 2:
+            chunks = split_array_to_chunks(items)
+            for chunk in chunks:
+                attr_box.addWidget(self.populate_buttons_from_list(chunk))
+        else:
+            attr_box.addWidget(self.populate_buttons_from_list(items))
+        attr_box.addStretch()
 
-            widget.setLayout(layout)
-            attr_box.addWidget(widget)
 
-    def __set_populate_buttons(self):
-        selected_items = self.digital_sketch_widget.mComboBox.checkedItems()
-        QgsApplication.messageLog().logMessage(f'selected_items {selected_items}.', 'DigitalSketchPlugin')
-        attr_box_ = self.digital_sketch_widget.selectedAttributesLayout
+    def button_clicked(self, button_name, btn):
+        """Handle the button click of keypad elements.
 
-        QgsApplication.messageLog().logMessage(f'attr_box . {attr_box_}', 'DigitalSketchPlugin')
+        :param button_name: Name of the button
+        :type button_name: str
 
-        for item in selected_items:
-            QgsApplication.messageLog().logMessage(f'item: {item}.', 'DigitalSketchPlugin')
-            button_name = f"btn_{item.lower().replace(' ', '_')}"
-            existing_button = attr_box_.findChild(QPushButton, item)
-
-            button = QPushButton(item)
-            QgsApplication.messageLog().logMessage('adding a new button', 'DigitalSketchPlugin')
-            button.setStyleSheet(f"""
-                    QPushButton {{
-                        background-color: red;
-                        color: white;
-                        border: 1px solid black;
-                        padding: 5px;
-                        border-radius: 4px;
-                    }}
-                    QPushButton:hover {{
-                        background-color: lighten(red, 20%);
-                    }}
-                """)
-            button.setObjectName(button_name)
-            attr_box_.addWidget(button)
-            button.clicked.connect(lambda checked, btn_name=item: self.__button_clicked(btn_name))
-
-    # --------------------------------------------------------------------------
-
-    def __colour_changed(self, colour):
-        self.selected_colour = colour.name()
-        QgsApplication.messageLog().logMessage(f'selected colour: {self.selected_colour}', 'DigitalSketchPlugin')
-
-    # --------------------------------------------------------------------------
-
-    def __hiding_folder_control(self):
-        self.digital_sketch_widget.folderLbl.setVisible(False)
-        self.digital_sketch_widget.folderQgsFileWidget.setVisible(False)
-        self.digital_sketch_widget.setFolderPushButton.setVisible(False)
-
-    # --------------------------------------------------------------------------
-
-    def __button_clicked(self, button_name):
+        :param :btn: clicked button
+        :type btn: QButton
+        """
+        if self.text_changed:
+            btn.setChecked(False)
+        else:
+            btn.setChecked(True)
+        self.clicked_buttons.add(btn)
         if self.feature_string == "":
             self.feature_string = button_name
 
-        elif button_name not in self.feature_string:
-            self.feature_string = f'{self.feature_string}_{button_name}'
+        else:
+            self.feature_string = f'{self.feature_string}{button_name}'
 
-        QgsApplication.messageLog().logMessage(
-            f'clicked button {button_name} feature_string {self.feature_string}.', 'DigitalSketchPlugin')
+        self.update_code_line_edit(self.feature_string)
 
-    # --------------------------------------------------------------------------
+
+    def start_line_digitizing(self):
+        """Called when the line button is clicked from the dock widget
+        This function calls the setup digitizing function by passing line layers"""
+        self.setup_digitizing(self.line_layer, 'lines')
+
+
+    def start_point_digitizing(self):
+        """Called when the point button is clicked from the dock widget
+        This function calls the setup digitizing function by passing point layers"""
+        self.setup_digitizing(self.point_layer, 'points')
+
+
+    def start_polygon_digitizing(self):
+        """Called when the polygon button is clicked from the dock widget
+        This function calls the setup digitizing function by passing ploygon layers"""
+        self.setup_digitizing(self.polygon_layer, 'polygons')
+
 
     def setup_digitizing(self, layer, layer_type):
-        """Setup digitizing mode with automated attribute handling"""
+        """Setup digitizing mode with automated attribute handling
+        Check if layers are defined and if not, show a critical error message on the Error message bar.
+
+        :param layer: Layer to be used for digitizing
+        :type layer: QgsVectorLayer
+
+        :param layer_type: Type of layer to be used for digitizing i.e. polygons, lines, points
+        :type layer_type: str
+        """
+
+        if layer is None:
+            self.iface.messageBar().pushMessage("Error", f"There is no {layer_type} layer created/added. Use the Settings button to assign existing layers to be used by the sketch tool or to create a new project.",
+                                                level=Qgis.Critical, duration=5)
+            self.check_for_current_selection()
+            return
+
+        """If the digitizing tool is set i.e. another layer is editable.
+        Check if there are any pending features that needs to be saved then save the layer.
+        If not loop through the layers and commit changes such that only one layer would be editable.
+        Remove the current digitizing tool from the map canvas.
+        """
+        if self.digitizing_tool is not None:
+            if self.digitizing_tool.features_to_save():
+                self.save_layers(False)
+            else:
+                self.iterate_and_commit_layers(False)
+            self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
+
+
+        if self.auto_update_enabled:
+            self.update_auto_update_disabled_flag(True)
+
         # Make layer active and editable
+        self.feature_identify_tool.remove_highlight()
+        self.check_for_current_selection(layer_type)
         self.iface.setActiveLayer(layer)
-        layer.startEditing()
 
-        if layer_type == 'line':
-            QgsApplication.messageLog().logMessage("line layer", 'DigitalSketchPlugin')
-            self.enable_feature_create("Add Line Feature")
-            # self.enable_stream_digitize()
-            self.setup_stream_digitizing(layer, layer_type)
+        tool_map = {
+            'lines': self.multiline_tool,
+            'points': self.point_tool,
+            'polygons': self.polygon_tool
+        }
 
-        elif layer_type == 'point':
-            QgsApplication.messageLog().logMessage("point layer", 'DigitalSketchPlugin')
-            self.enable_feature_create("Add Point Feature")
-
-        elif layer_type == 'polygon':
-            QgsApplication.messageLog().logMessage("polygon layer", 'DigitalSketchPlugin')
-            self.enable_feature_create("Add Polygon Feature")
-            # self.enable_stream_digitize()
-            self.setup_stream_digitizing(layer, layer_type)
+        tool = tool_map.get(layer_type)
+        if tool:
+            self.setup_stream_digitizing(layer, tool)
 
         # Connect to feature added signal
-        layer.featureAdded.connect(lambda fid: self.populate_attributes(fid, layer))
+        layer.featureAdded.connect(lambda fid: self.process_layer_after_adding(fid, layer, layer_type))
 
-    # --------------------------------------------------------------------------
 
-    def save_layers(self):
-        QgsApplication.messageLog().logMessage("Save layers is called", 'DigitalSketchPlugin')
-        if self.point_layer.isEditable():
-            self.point_layer.commitChanges()  # Save the changes
-            self.iface.messageBar().pushMessage("Success", "Changes committed successfully to point layer!",
-                                                level=Qgis.Success)
+    def auto_update_toggled(self, value):
+        """Handle the auto-update toggled event.
+        If the auto-update is toggled, then the map will be rotated and centered automatically.
+        Else, disable auto update and if there is timer set up stop it.
 
-        if self.line_layer:
-            self.line_layer.commitChanges()  # Save the changes
-            self.iface.messageBar().pushMessage("Success", "Changes committed successfully to line layer!",
-                                                level=Qgis.Success)
+        :param value: Boolean value of the toggled event
+        """
 
-        if self.polygon_layer:
-            self.polygon_layer.commitChanges()  # Save the changes
-            self.iface.messageBar().pushMessage("Success", "Changes committed successfully to polygon layer!",
-                                                level=Qgis.Success)
+        if value != 1:
+            self.auto_update_enabled = False
+            if self.auto_update_Timer is not None:
+                self.auto_update_Timer.stop()
+            return
 
-    # --------------------------------------------------------------------------
+        self.auto_update_enabled = True
+        self.change_gps_settings(True)
+        self.setup_auto_gps_update()
 
-    def open_settings(self):
-        QgsApplication.messageLog().logMessage("Open settings is called", 'DigitalSketchPlugin')
 
-        settings_dialog = AppSettingsDialog(self.keypad_manager)
+    def setup_auto_gps_update(self):
+        """Set the auto gps rotate and centering.
+        Get the gps connection from the GPS registry if a connection exists, then use it. Else display an error message.
+        If the update_interval attribute is defined, then use it. Otherwise, get the default interval.
+        Convert the interval from seconds to milliseconds and set the auto-update timer.
+        """
+
+        self.gps_connection = self.check_for_gps_connection()
+
+        if self.gps_connection is None:
+            return
+
+        interval = self.attributes["update_interval"] if self.attributes is not None else get_default_auto_update_interval()
+        self.auto_update_Timer = QTimer()
+        self.auto_update_Timer.timeout.connect(self.get_gps_data)
+        self.auto_update_Timer.start(interval * 1000)
+
+
+    def check_for_gps_connection(self):
+        """Check if there is a GPS connection"""
+        connections = QgsApplication.gpsConnectionRegistry().connectionList()
+        if not connections or len(connections) == 0:
+            self.auto_update_position_error()
+            return None
+
+        return connections[0]
+
+
+    def get_gps_data(self, auto_rotate=True, done_digitizing=False):
+        """Get the Position data from the GPS Connection.
+        Call the rotate_and_recenter_with_a_buffer method to update the map.
+
+        :param auto_rotate: Boolean value to indicate if its called
+        :type auto_rotate: bool
+
+        :param done_digitizing: Boolean value to indicate if the method is called after digitizing
+        :type done_digitizing: bool
+        """
+        if self.auto_update_disabled and not done_digitizing:
+            return
+
+        self.gps_connection = self.check_for_gps_connection()
+
+        if self.gps_connection is None:
+            return
+
+        position = self.gps_connection.currentGPSInformation().componentValue(Qgis.GpsInformationComponent.Location)
+
+        if position is None:
+            self.auto_update_position_error()
+            return
+
+        self.rotate_and_recenter_with_a_buffer(position, auto_rotate)
+
+
+    def auto_update_position_error(self, show_message=True):
+        """Display check GPS Connection Error message.
+
+        :param show_message: Boolean value to indicate if a message should be shown on the Error message bar
+        :type show_message: bool
+        """
+        self.auto_update_enabled = False
+        self.digital_sketch_widget.autoUpdateSlider.setSliderPosition(0)
+
+        if show_message:
+            self.iface.messageBar().pushMessage("Info", "Check GPS Connection.", level=Qgis.Warning, duration=5)
+
+
+    def zoom_to_map(self, is_zoom_in):
+        """Perform zoom to map
+
+        :param is_zoom_in: Boolean to indicate if it is Zoom in or Zoom out
+        :type is_zoom_in: bool
+        """
+        self.zoom_tool.zoom_map(is_zoom_in)
+
+
+    def save_and_pan(self):
+        """Saves the layers, remove the Digitizing tool as the active map tool and enable the Pan mode"""
+        self.save_layers(True)
+        self.remove_digitizing_tool()
+        self.digital_sketch_widget.saveAndPanPushButton.setChecked(True)
+        self.check_for_current_selection('save-and-pan')
+
+
+    def save_layers(self, show_message):
+        """Save the layers.
+        Check for pending features to save i.e. digitized and not clicked on Done.
+        If so, save those features first.
+
+        :param show_message: Boolean to indicate a message should be shown on the Message bar or nor/
+        :type show_message: bool
+        """
+        if self.digitizing_tool is not None and self.digitizing_tool.features_to_save():
+            self.done_digitizing()
+
+        if show_message:
+            self.change_gps_settings(True)
+            self.check_for_current_selection()
+
+        if self.auto_update_enabled:
+            self.update_auto_update_disabled_flag(False)
+            self.change_gps_settings(True)
+
+        self.iterate_and_commit_layers(show_message)
+
+
+    def iterate_and_commit_layers(self, show_message):
+        """This function will iterate over sketch layers and see if they are editable if so commit changes.
+        If show_message is True, then will show a success message on the Message Bar
+
+        :param show_message: Should the commit changes message be shown or not.
+        :type show_message: bool
+        """
+        layers = [
+            (self.point_layer, "Point"),
+            (self.line_layer, "Line"),
+            (self.polygon_layer, "Polygon")
+        ]
+
+        for layer, name in layers:
+            if layer.isEditable():
+                layer.commitChanges()  # Save the changes
+                if show_message:
+                    self.iface.messageBar().pushMessage("Success", f"Changes committed successfully to {name} layer!",
+                                                        level=Qgis.Success)
+
+
+    def layer_removed(self, layer_id):
+        """This function is called when a layer is removed.
+        If a sketch layer is removed, then the corresponding layer placeholder is set to None ans an error message is shown.
+
+        :param layer_id: ID of the layer removed
+        :type layer_id: int
+        """
+        if not self.sketch_layers_set or 'sketch_' not in layer_id:
+            return
+
+        attr_box = self.digital_sketch_widget.categoryAttrVerticalLayout
+        delete_keypad_items(attr_box)
+        self.check_for_current_selection()
+        self.reset_selection_digitize_tool()
+
+        if 'sketch_lines' in layer_id:
+            self.line_layer = None
+        elif 'sketch_polygons' in layer_id:
+            self.polygon_layer = None
+        elif 'sketch_points' in layer_id:
+            self.point_layer = None
+
+        self.show_error_message('Sketch layer removed')
+
+
+    def show_error_message(self, message):
+        """Show an error message on the Message bar with a button to open the settings window.
+
+        :param message: Message to show
+        :type message: str
+        """
+        msg = self.iface.messageBar().createMessage(f"Error: {message}")
+        btn = QPushButton("Please define your sketch layers or create new ones")
+        btn.clicked.connect(lambda: self.redefine_layers(msg))
+        btn.setMinimumHeight(30)
+        font = btn.font()
+        font.setPointSize(11)
+        btn.setFont(font)
+
+        msg.layout().addWidget(btn)
+        self.iface.messageBar().pushWidget(msg, level=Qgis.Critical, duration=0)
+
+
+    def redefine_layers(self, message):
+        """On the error message button click open the settings window to either redefine sketch layers or create a new project.
+
+        :param message: Message instance to dismiss
+        :type message: QMessageBar
+        """
+        message.dismiss()
+        if self.attributes is not None:
+            self.attributes["use_existing"] = False
+        self.open_settings(True)
+
+
+    def enable_log_to_file(self):
+        gps = self.iface.mainWindow().findChild(QWidget, 'QgsGpsInformationWidgetBase')
+        popup_btn = gps.findChild(QToolButton, "mBtnPopupOptions")
+
+        if not popup_btn:
+            return
+
+        btn_menu = popup_btn.menu()
+        log_to_file = next(
+            (action for action in btn_menu.findChildren(QAction)
+             if action.text() == 'Log to GeoPackage/Spatialite…'),
+            None
+        )
+
+        if log_to_file and not log_to_file.isChecked():
+            QgsApplication.messageLog().logMessage(f"log_to_file: {log_to_file.isChecked()}", "DigitalSketchPlugin")
+            log_to_file.setChecked(True)
+
+
+    def change_gps_settings(self, start_digitizing):
+        """Change the GPS settings based on if it's digitizing or not.
+        If it is digitizing, then autorotation and centering are disabled.
+
+        :param start_digitizing: Boolean to indicate if it is digitizing or not
+        :type start_digitizing: bool
+        """
+        gps = self.iface.mainWindow().findChild(QWidget, 'QgsGpsInformationWidgetBase')
+        popup_btn = gps.findChild(QToolButton, "mBtnPopupOptions")
+
+        if not popup_btn:
+            return
+
+        btn_menu = popup_btn.menu()
+        rotate_action = next(
+            (action for action in btn_menu.findChildren(QAction)
+             if action.text() == 'Rotate Map to Match GPS Direction'),
+            None
+        )
+
+        if rotate_action:
+            if start_digitizing:
+                self.rotate_on_gps_before_digitising = rotate_action.isChecked()
+                rotate_action.setChecked(False)
+            else:
+                flag = self.rotate_on_gps_before_digitising if self.rotate_on_gps_before_digitising is not None else True
+                rotate_action.setChecked(flag)
+
+        radio_buttons = {
+            True: 'Never Recenter',
+            False: 'Recenter Map When Leaving Extent'
+        }
+        target_btn = radio_buttons[start_digitizing]
+
+        for radio_btn in btn_menu.findChildren(QRadioButton):
+            if radio_btn.text() == target_btn:
+                radio_btn.click()
+
+
+    def open_settings(self, disable_existing=False):
+        """Open the settings window.
+
+        :param disable_existing: Boolean to indicate if it is to disable existing layers checkbox
+        :type disable_existing: bool
+        """
+        settings_dialog = AppSettingsDialog(self.keypad_manager, self.attributes, disable_existing)
         if settings_dialog.exec_() == QDialog.Accepted:
-            self.__populate_categories()
+            self.attributes = settings_dialog.get_attributes()
+            self.selected_colour = self.attributes['feature_colour']
 
-    # --------------------------------------------------------------------------
+            if self.attributes['new_project']:
+                self.reset_selection_digitize_tool()
+                self.remove_layers()
+                self.set_folder_location()
 
-    def enable_feature_create(self, action_name):
-        toolbar = self.iface.digitizeToolBar()
-        QgsApplication.messageLog().logMessage(f"Toolbar found: {toolbar.objectName()}", 'DigitalSketchPlugin')
+            elif not self.folder_location_set and self.attributes['folder_path'] is not None:
+                self.set_folder_location()
 
-        for action in toolbar.actions():
-            action_text = action.text() if action.text() else "[No Text]"
-            if action_text == action_name:
-                action.trigger()
+            elif self.use_existing != self.attributes['use_existing'] and self.attributes['use_existing']:
+                self.set_layer_from_existing(self.attributes['layers'])
 
-    # --------------------------------------------------------------------------
+            if self.point_layer is not None and self.line_layer is not None and self.polygon_layer is not None:
+                self.populate_categories()
 
-    def setup_stream_digitizing(self, layer, layer_type):
-        """Setup digitizing mode using stylus events"""
+            else:
+                if self.geopackage_created:
+                    self.show_error_message('All sketch layers are not defined')
+
+            bing_layer = get_bing_layer(self.bing_layer_name)
+            if self.attributes['add_bing_imagery'] and not bool(bing_layer):
+                self.load_bing_maps()
+
+
+    def done_digitizing(self):
+        """Handle the Done Digitizing button click."""
+        if self.digitizing_tool is None:
+            self.iface.messageBar().pushMessage("Info", "The Digitizing tool is not active. Please use the polygon, point and line sketch buttons to create your sketch.",
+                                                level=Qgis.Info, duration=5)
+            return
+
+        elif not self.digitizing_tool.features_to_save():
+            self.iface.messageBar().pushMessage("Info", "There is no sketch to be stored.",
+                                                level=Qgis.Info, duration=5)
+            return
+
+        else:
+            self.clear_current_btn_selection()
+            self.clicked_buttons.clear()
+            self.text_changed = False
+            code_attr = self.feature_string if not self.text_changed else self.get_code_txt()
+            surveyor = self.attributes['surveyor'] if self.attributes is not None else ""
+            type_txt = self.attributes['type_txt'] if self.attributes is not None else ""
+            attributes = dict(colour=self.selected_colour, code=code_attr, surveyor=surveyor,
+                              type_txt=type_txt)
+            self.digitizing_tool.save_feature(attributes)
+            if self.attributes['rotate_recenter_on_done']:
+                connections = QgsApplication.gpsConnectionRegistry().connectionList()
+                if not connections or len(connections) == 0:
+                    self.iface.messageBar().pushMessage("Info", "Check GPS Connection.", level=Qgis.Warning, duration=5)
+                    return
+
+                self.gps_connection = connections[0]
+                self.get_gps_data(False, True)
+
+
+
+    def code_text_changed(self):
+        """Handle the code text changed event.
+        This would clear the existing keypad button selection.
+        """
+        self.text_changed = True
+        self.clear_current_btn_selection()
+
+
+    def clear_current_btn_selection(self):
+        """Clear the current keypad button selection."""
+        if len(self.clicked_buttons) >= 1:
+            for btn in self.clicked_buttons:
+                btn.setChecked(False)
+            self.clicked_buttons.clear()
+
+
+    def code_text_changed_finished(self):
+        """Handle the code text changed event."""
+        self.feature_string = self.get_code_txt()
+
+
+    def remove_feature(self):
+        """ Removes a feature from the layer.
+        If the user is still digitizing, then that feature will be removed.
+        If the user has selected a feature, then the selected feature will be removed.
+        Else, the last created feature will be removed
+
+        Before removing the user will be shown a confirmation dialog.
+        """
+        if self.digitizing_tool is not None:
+            self.digitizing_tool.remove_feature()
+            return
+
+        if self.selected_attribute is not None:
+            layer_type = self.selected_attribute["type"]
+            layer_fid = self.selected_attribute["fid"]
+            layer_code = self.selected_attribute["code"]
+            if show_delete_confirmation(f'selected feature?\n(Layer: {layer_type} Code: {layer_code})') == QDialog.Accepted:
+                if self.selected_attribute in self.created_layers_stack:
+                    self.created_layers_stack.remove(self.selected_attribute)
+            else:
+                self.selected_attribute = None
+                self.feature_identify_tool.remove_highlight()
+                return
+
+        else:
+            if len(self.created_layers_stack) == 0:
+                return
+
+            last_index = len(self.created_layers_stack)-1
+            last_layer = self.created_layers_stack[last_index]
+            layer_type = last_layer["type"]
+            layer_fid = last_layer["fid"]
+            layer_code = last_layer["code"]
+            if show_delete_confirmation(f'most recent feature?\n(Layer: {layer_type} Code: {layer_code})') == QDialog.Accepted:
+                self.created_layers_stack.pop()
+            else:
+                return
+
+        if "lines" in layer_type:
+            self.delete_feature(self.line_layer, layer_fid)
+
+        elif "points" in layer_type:
+            self.delete_feature(self.point_layer, layer_fid)
+
+        elif "polygons" in layer_type:
+            self.delete_feature(self.polygon_layer, layer_fid)
+
+
+    def delete_feature(self, layer, fid):
+        """Deletes a feature from a layer.
+        :param layer: Layer to delete the feature from.
+        :type layer: QgsVectorLayer
+
+        :param fid: ID of the feature to delete
+        :type fid: int
+        """
+        self.feature_identify_tool.remove_highlight()
+        layer.startEditing()
+        layer.deleteFeature(fid)
+        layer.commitChanges()
+        self.selected_attribute = None
+
+
+    def setup_stream_digitizing(self, layer, tool):
+        """Setup digitizing mode.
+        Change the GPS settings in preparation for enabling digitizing.
+
+        :param layer: Layer to set up digitizing mode
+        :type layer: QgsVectorLayer
+
+        :param tool: Type of the digitizing tool
+        :type tool: MultiLineDigitizingTool or StreamDigitizingTool
+        """
+        self.change_gps_settings(True)
+        self.iface.mapCanvas().refresh()
         self.iface.setActiveLayer(layer)
         layer.startEditing()
-
-        self.digitizing_tool = StreamDigitizingTool(self.iface, layer, layer_type)
+        self.digitizing_tool = tool
         self.iface.mapCanvas().setMapTool(self.digitizing_tool)
 
-    def enable_stream_digitize(self):
-        toolbar = self.iface.digitizeToolBar()
-        QgsApplication.messageLog().logMessage(f"Toolbar found: {toolbar.objectName()}", 'DigitalSketchPlugin')
 
-        action_triggered = False
-        for action in toolbar.actions():
-            if action_triggered:
-                break
-            else:
-                if isinstance(action, QWidgetAction):  # If it's a QWidgetAction, get its widget
-                    widget = action.defaultWidget()
-                    if widget:
-                        action_text = widget.text() if hasattr(widget, "text") else "[No Text]"
-                        QgsApplication.messageLog().logMessage(
-                            f"QWidgetAction - Text: {action_text} is menu {isinstance(widget, QToolButton)}",
-                            'DigitalSketchPlugin')
+    def remove_digitizing_tool(self):
+        """Remove the digitizing tool from the Map"""
+        self.reset_selection_digitize_tool()
+        self.iface.actionPan().trigger()
 
-                        if "Digitiz" in action_text:
-                            sub_items = widget.menu()
-                            if sub_items:
-                                sub_actions = sub_items.actions()
-                                for inner_action in sub_actions:
-                                    # Look for the "Stream Digitizing" action in the toolbar
-                                    QgsApplication.messageLog().logMessage(f"Action - Text: {inner_action.text()}",
-                                                                           'DigitalSketchPlugin')
-                                    if inner_action.text() == "Stream Digitizing" and not inner_action.isChecked():
-                                        inner_action.trigger()
-                                        inner_action.toggle()
-                                        action_triggered = True
-                                        break
 
-                                    elif inner_action.text() == "Stream Digitizing" and inner_action.isChecked():
-                                        action_triggered = True
-                                        break
+    def setup_feature_identify_tool(self):
+        """Setup feature identifying tool.
+        If the sketch layers are not defined, then an error message will be shown on the Error message bar.
+        """
+        if not self.sketch_layers_set:
+            self.iface.messageBar().pushMessage("Info", "Sketch Layers are not define!", level=Qgis.Warning, duration=5)
+            return
 
-                                    elif inner_action.isChecked():
-                                        QgsApplication.messageLog().logMessage(
-                                            f"Action - is checked: {inner_action.text()}",
-                                            'DigitalSketchPlugin')
+        self.save_layers(True)
+        self.check_for_current_selection('select')
+        self.digital_sketch_widget.selectPushButton.setChecked(True)
+        self.reset_selection_digitize_tool()
+        self.iface.mapCanvas().setMapTool(self.feature_identify_tool)
 
-    # --------------------------------------------------------------------------
 
-    def populate_attributes(self, fid, layer):
-        """Automatically populate attributes for new features"""
+    def check_if_feature_from_sketch_layer(self, layer_id):
+        """Check if the layer id opf the selected feature is from the sketch layer.
+
+        :param layer_id: ID of the layer
+        :type layer_id: int
+
+        :return: Boolean to indicate if the feature is from the sketch layer
+        """
+        return layer_id in {self.point_layer.id(), self.polygon_layer.id(), self.line_layer.id()}
+
+
+    def reset_selection_digitize_tool(self):
+        """This clears the feature selection and if the digitize tool is set remove it from the map."""
+        self.selected_attribute = None
+        self.highlight = None
+        self.vertex_marker = None
+        if self.digitizing_tool is not None:
+            self.iface.mapCanvas().unsetMapTool(self.digitizing_tool)
+            self.digitizing_tool = None
+
+
+    def process_layer_after_adding(self, fid, layer, layer_type):
+        """Process the layer after adding a new feature
+
+        :param fid: ID of the added feature
+        :type fid: int
+
+        :param layer: Layer of the added feature
+        :type layer: QgsVectorLayer
+
+        :param: layer_type: type of the layer i.e. line, polygon or point.
+        :type layer_type: str
+        """
         feature = layer.getFeature(fid)
+        code = feature.attribute("Code")
+        self.layers_saved += 1
+        already_exist = {"type": layer_type, "fid": fid, "code": code} in self.created_layers_stack
+        if fid > 0 and not already_exist:
+            self.created_layers_stack.append({"type": layer.name(), "fid": fid, "code": code})
 
-        feature.setAttribute('colour', self.selected_colour)
-        feature.setAttribute('label', f"Feature_{fid} {self.feature_string}")
+        # for polygon layers update the fill colour
+        if layer_type == 'polygons':
+            apply_symbology(layer, self.iface)
 
-        # Update the feature
-        layer.updateFeature(feature)
-        apply_symbology(layer, self.iface)
+        if self.layers_saved == self.digitizing_tool.number_of_items_to_update:
+            self.layers_saved = 0
+            self.feature_string = ""
+            self.update_code_line_edit("")
 
-    # --------------------------------------------------------------------------
 
-    def __create_gpkg_file(self):
-        QgsApplication.messageLog().logMessage('creating new shape file', 'DigitalSketchPlugin')
+    def create_geopackage_file(self, project_name):
+        """Create a geopackage file with the given project name.
+
+        :param project_name: Name of the project
+        :type project_name: str
+        """
         date_time_str = datetime.now().strftime("%d-%m-%Y_%I-%M-%p")
-        shape_file_name = f"{date_time_str}.gpkg"
-        shape_file_path = os.path.join(self.folder_location, shape_file_name)
-        QgsApplication.messageLog().logMessage(f'file name: {shape_file_name} file path: {shape_file_path}',
-                                               'DigitalSketchPlugin')
+        gpkg_file_name = f"{project_name}_{date_time_str}.gpkg"
+        gpkg_file_name = os.path.join(self.folder_location, gpkg_file_name)
 
-        # get project CRS information
-        crs_ors = str(self.canvas.mapSettings().destinationCrs().toProj())
-        create_geopackage_file(shape_file_path, crs_ors)
+        self.project_crs = str(self.canvas.mapSettings().destinationCrs().toProj())
+        if self.project_crs is None:
+            self.project_crs = '+proj=longlat +datum=WGS84 +no_defs'
 
-        self.point_layer = QgsVectorLayer(f"{shape_file_path}|layername=points", "points", "ogr")
-        self.line_layer = QgsVectorLayer(f"{shape_file_path}|layername=lines", "lines", "ogr")
-        self.polygon_layer = QgsVectorLayer(f"{shape_file_path}|layername=polygons", "polygons", "ogr")
+        self.geopackage_created = create_geopackage_file(gpkg_file_name, self.iface, self.project_crs)
 
-        self.point_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "plugin_style.qml"))
-        self.polygon_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "plugin_style.qml"))
-        self.line_layer.loadNamedStyle(os.path.join(os.path.dirname(__file__), "plugin_style.qml"))
+        if not self.geopackage_created:
+            return
 
-        QgsProject.instance().addMapLayer(self.point_layer)
-        QgsProject.instance().addMapLayer(self.line_layer)
+        self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch_points", f"{project_name}_sketch_points", "ogr")
+        self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch_lines", f"{project_name}_sketch_lines", "ogr")
+        self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch_polygons", f"{project_name}_sketch_polygons", "ogr")
+        self.sketch_layers_set = True
         QgsProject.instance().addMapLayer(self.polygon_layer)
+        QgsProject.instance().addMapLayer(self.line_layer)
+        QgsProject.instance().addMapLayer(self.point_layer)
+
+        self.set_style_and_digitizing_tool()
+
+
+    def  check_for_current_selection(self, selection=None):
+        """Check if there is already a button checked.
+
+        :param selection: If the selection is not None, the pressed_btn will be set.
+                            Else all the buttons set checked will be set to false
+        :type selection: str
+        """
+        if self.pressed_btn is not None:
+            if self.pressed_btn == 'lines':
+                self.digital_sketch_widget.linePushButton.setChecked(False)
+            elif self.pressed_btn == 'points':
+                self.digital_sketch_widget.pointPushButton.setChecked(False)
+            elif self.pressed_btn == 'polygons':
+                self.digital_sketch_widget.polygonPushButton.setChecked(False)
+            elif self.pressed_btn == 'save-and-pan':
+                self.digital_sketch_widget.saveAndPanPushButton.setChecked(False)
+            elif self.pressed_btn == 'select':
+                self.digital_sketch_widget.selectPushButton.setChecked(False)
+
+        if selection is not  None:
+            self.pressed_btn = selection
+
+        elif selection is None:
+            self.pressed_btn = None
+            self.digital_sketch_widget.linePushButton.setChecked(False)
+            self.digital_sketch_widget.pointPushButton.setChecked(False)
+            self.digital_sketch_widget.polygonPushButton.setChecked(False)
+            self.digital_sketch_widget.saveAndPanPushButton.setChecked(False)
+            self.digital_sketch_widget.selectPushButton.setChecked(False)
+
+
+    def populate_buttons_from_list(self, items):
+        """Populate the keypad buttons from the list.
+        Set the button's style using the attributes defined in the settings window or using the default style
+        Setting up the clicked signal.
+
+        :param items: List of items
+        :type items: list
+
+        :return: QWidget
+        """
+        margin = QMargins(1,1,1,1)
+        layout = QHBoxLayout()
+        layout.setContentsMargins(margin)
+        height = self.attributes["height"] if self.attributes is not None else get_default_button_height()
+        width = self.attributes["width"] if self.attributes is not None else get_default_button_width()
+        font = self.attributes["font"] if self.attributes is not None else get_default_button_font()
+        font_colour = self.attributes["colour"] if self.attributes is not None else get_default_button_font_colour()
+        widget = QWidget()
+        widget.setMinimumHeight(height + 1)
+        widget.setMaximumHeight(height + 1)
+
+        # generate keypad items from the selected category.
+        for i in items:
+            light_colour = adjust_color(i["colour"], 30)
+            btn = QPushButton(i["item"])
+            btn.setMinimumHeight(height)
+            btn.setMaximumHeight(height)
+            btn.setMinimumWidth(width)
+            btn.setMaximumWidth(width)
+            btn.setFont(font)
+            btn.setCheckable(True)
+            btn.setStyleSheet(f"""
+                            QPushButton {{
+                                background-color: {i["colour"]};
+                                color: {font_colour};
+                                border-radius: 5px;
+                                padding: 2px 2px;
+                            }}
+                            QPushButton:hover {{
+                                background-color: {light_colour};
+                            }}
+                            QPushButton:checked {{
+                                border: 2px solid black
+                            }}
+                            """)
+            layout.addWidget(btn)
+            btn.clicked.connect(lambda checked, btn_name=i["item"], clicked_btn=btn: self.button_clicked(btn_name, clicked_btn))
+            layout.setContentsMargins(1, 1, 1, 1)
+            layout.setSpacing(2)
+
+        layout.addItem(QSpacerItem(40, 30, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        layout.insertStretch(-1, 100)
+        widget.setLayout(layout)
+        return widget
+
+
+    def update_code_line_edit(self, value):
+        """Update the code line edit with the given value.
+
+        :param value: Value to be used for the code
+        :type value: str
+        """
+        self.digital_sketch_widget.codeLineEdit.setText(value)
+
+
+    def get_code_txt(self):
+        """Get the code text from the code line edit.
+
+        :return: The code text
+        """
+        return self.digital_sketch_widget.codeLineEdit.text().strip()
+
+
+    def set_style_and_digitizing_tool(self):
+        """Sets the styles of sketch layers."""
+        if self.point_layer is not None:
+            self.point_layer.loadNamedStyle(self.point_style)
+            self.point_tool = StreamDigitizingTool(self.iface, self.point_layer, 'points')
+
+        if self.polygon_layer is not None:
+            self.polygon_layer.loadNamedStyle(self.polygon_style)
+            self.polygon_tool = StreamDigitizingTool(self.iface, self.polygon_layer, 'polygons')
+
+        if self.line_layer is not None:
+            self.line_layer.loadNamedStyle(self.line_style)
+            self.multiline_tool = MultiLineDigitizingTool(self.iface, self.line_layer)
 
         self.canvas.refresh()
 
-    # --------------------------------------------------------------------------
 
-    def check_and_get_folder(self):
-        if not self.folder_location:  # Check if empty or None
-            QgsApplication.messageLog().logMessage('folder not set', 'DigitalSketchPlugin')
-            self.digital_sketch_widget.folderLbl.setVisible(True)
-            self.digital_sketch_widget.folderQgsFileWidget.setVisible(True)
-            self.digital_sketch_widget.setFolderPushButton.setVisible(True)
+    def update_selected_layer_style(self):
+        """Updated the selected features layer style"""
+        layer_type = self.selected_attribute["type"]
 
-    #--------------------------------------------------------------------------
+        layer = None
+        if "lines" in layer_type:
+            layer = self.line_layer
+        elif "points" in layer_type:
+            layer = self.point_layer
+        elif "polygons" in layer_type:
+            layer = self.polygon_layer
+
+        layer.startEditing()
+
+
+    def update_auto_update_disabled_flag(self, state):
+        """Update the auto update disabled flag.
+
+        :param state: State (disabled or enabled)
+        :type state: bool
+        """
+        self.auto_update_disabled = state
+        self.digital_sketch_widget.autoUpdateSlider.setDisabled(state)
 
     def onClosePlugin(self):
-        """Cleanup necessary items here when plugin dockwidget is closed"""
+        """Cleanup the necessary items here when plugin dockwidget is closed"""
 
         #print "** CLOSING DigitalSketchMappingTool"
 
@@ -594,15 +1354,20 @@ class DigitalSketchMappingTool:
 
         #print "** UNLOAD DigitalSketchMappingTool"
 
-        # for action in self.actions:
-        #     self.iface.removePluginMenu(
-        #         self.tr(u'&Digital Sketch Mapping Tool'),
-        #         action)
-        #     self.iface.removeToolBarIcon(action)
-        # # remove the toolbar
-        # del self.toolbar
+        for action in self.actions:
+            self.iface.removePluginMenu(self.tr(u'&Digital Sketch Mapping Tool'), action)
+            self.iface.removeToolBarIcon(action)
+            try:
+                self.toolbar.removeAction(action)
+            except Exception:
+                pass
+            action.deleteLater()
 
-    #--------------------------------------------------------------------------
+        if self.toolbar:
+            del self.toolbar
+
+        self.actions.clear()
+
 
     def run(self):
         """Run method that loads and starts the plugin"""
@@ -620,6 +1385,5 @@ class DigitalSketchMappingTool:
             self.digital_sketch_widget.closingPlugin.connect(self.onClosePlugin)
 
             # show the dockwidget
-            # TODO: fix to allow choice of dock location
-            self.iface.addDockWidget(Qt.BottomDockWidgetArea, self.digital_sketch_widget)
+            self.iface.addDockWidget(Qt.RightDockWidgetArea, self.digital_sketch_widget)
             self.digital_sketch_widget.show()

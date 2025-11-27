@@ -3,17 +3,24 @@
 # This file should be included when you package your plugin.# Mandatory items:
 
 [general]
-name=Digital Sketch Mapping Tool
+name=digital_sketch_mapping_tool
 qgisMinimumVersion=3.0
 description=Digital sketch mapping tool
-version=0.1
+version=1.1.12
 author=ESK Spatial
-email=sakna.hewagalamulage@eskspatial.com.au
+email=development@eskspatial.com.au
+icon=icon.png
+tags=python
+category=Digitizing, Drawing
 
-about=A digital sketch mapping tool, used for making polygons, points and lines on the map
+about=Used for digitising points, polygons and multi-line features on the map.<br>
+      This plugin integrates with the built-in QGIS GPS functionality to display the current position.<br/>
+      <b>Developed By:</b>
+    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABACAMAAADbASJGAAAAflBMVEVHcExCQkJkZGRjYmLRw7xvbm5GRkaejoZiYmJDQ0NOTk5ISEh5eHdRUFBJSUlWVlZLS0vPkHBRUVFMTEzFXivFYC7HZjZjY2PGYzPFYTDLe1JFRUVISEjKd03MhWLHbD5paGhYWFjJckhUVFTHaDnJcEXIaz3DgF7Lf1hBQUEA11EyAAAAKXRSTlMA/zpKAhTfBi33lMgNdcFatQyCpPztsibL3zDs0j8Vch5RTWudXo0cJMoWnw8AAARdSURBVFjD7Zhpk6sqEIZdUNSYuCHuGreY/P8/eEmUxYgn45yaqnOrpj+NoelHXpqmHUX5tf+5AQgh+N7Mq7VnV8HNtdo+dBwn7FvLlcw2+G8GnZ9ANtsx98xhTtc+Mm1bfZptm5HHQhrR7Fq2jGH5dH7I3sb1H3sWLRDXO9mrAdvXlyHjsvzi0XiJr84/qRFX4jPEcIrNkNlDOYQz/ET5OgSGtmSsmCnvkGskY3yGtHwdqiqsRZNABIalHIC4ESWYvuNEJ4pUX2mxhhgOfYvLikEg6p69IJa5hIk0FwBoeOUSp0zeIYZDhT1p63MC2/OevVLIWyZeaK5Q+ez2DeKyzSu1g4e1Vxd16FmH0bxOu19D/oKhnBeZfXay9HA2bQWBZ7pbpX647PTL+9nhFW5HOaSnDLM9Xt9YBtul4yUu2IH4f2RAb7PhnlABlaTkx8Q2/XBVHxnkQXO38GTrkKTwSSy/MFTFs/MEnTV3A6HD5VWRQjaHcO2YnN7H1SJqXTmEbB38DkTRS0npiiw5hOzJtyBA87clUi11IIXwU3sI8rxQ/ELdeGlyiCoR7CsQ4qWHvmmvU8BxV5CCJnGxFUxy/fqGrBcwLO8JWhd7DjE9emwfl2TbSCTvJjvaDBSZLJE8AULOhxGtboFD3cxs/Nzo7IINAT/x5G9FM2mKt8cY2lINPf5yVvlghXl1nwAm2Ck5WOk3VQA6OxBFEMyV6iGzZ320qeY8VSKJXPMwFUx0f71X7+zZUyJ6+/IbFbTmduMXyJ5gHxoJ1kc8yrNmENNCijWtbUtksHZlJdinboV3RKp5ulxOpiom6hpSwx3BPrZEjiofLa33biW4dQo42+L4V5u7qy+lzDegCAFdnN4Vw5dk2OdeOIlkRXi+ZUXIhBG6BaJg4EhX37919WrhWOC94QYNQigepYK54WnPWM0G5PukLOYirNpF6eguK6+z60VXpiElRpZiODRAz8qEsWurJEx08qUVReRTSxMKKHAXX6jA+mVkhS4L8I2PP9IKQ/C9j8Zf+/f+A5BoP2YWTUNo6T9mGsv135w8aMFUC4UiICb2TeQHsBrkw+RR7ke2ehVDgSMmde1OH+8DxniouH+HbzWNk+OXdcz3xilkYsWJDXN6WZXFOEUDBecxyjKUMf8Ao5j5d2mGUJaOdGqc1iwOqfQ39vZwQI2oxohwnjdNwCBpfsfcJc+ymE2GU55mVR1IIAGOnxejHEJWgtJhnFjQOKtyDiFX0S3N2GRlSrOcTxUgeYaHeNyDwA4TDXC9kiulkWqcVQMaP0Ma1IxoCHbkyrv8PmZxxSDxcGtywOK8diz4BKkxwhixsXdIg3BHIDnfk7twM91QitOYB77vQKo4w0SRhkNw04xsnXeyY3HMcjHP0om/wlOtoBbEntJUgGRUZdDETRCMMV7CwBuKxUQAU9c0FdMj6CrhhM1PRFH275uq48N1Vy15B/Nuej0H7JmYGOlnrpDVp9OvfdX+A65yGrjOgIM/AAAAAElFTkSuQmCC"/>
+    <a href="https://eskspatial.com.au/">eskspatial.com.au</a>
 
-tracker=http://bugs
-repository=http://repo
+# tracker=http://bugs
+# repository=http://repo
 # End of mandatory metadata
 
 # Recommended items:
@@ -23,11 +30,11 @@ hasProcessingProvider=no
 # changelog=
 
 # Tags are comma separated with spaces allowed
-tags=python
 
-homepage=http://homepage
-category=Plugins
-icon=icon.png
+
+# homepage=http://homepage
+
+
 # experimental flag
 experimental=False
 
@@ -38,9 +45,6 @@ deprecated=False
 # (or upgraded) can be specified.
 # Check the documentation for more information.
 # plugin_dependencies=
-
-Category of the plugin: Raster, Vector, Database or Web
-# category=
 
 # If the plugin can run on QGIS Server.
 server=False

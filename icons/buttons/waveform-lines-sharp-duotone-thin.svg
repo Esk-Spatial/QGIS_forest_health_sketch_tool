@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 640 512"
+   version="1.1"
+   id="svg2"
+   sodipodi:docname="waveform-lines-sharp-duotone-thin.svg"
+   inkscape:version="1.3 (0e150ed6c4, 2023-07-21)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs2" />
+  <sodipodi:namedview
+     id="namedview2"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="1.5058594"
+     inkscape:cx="319.41894"
+     inkscape:cy="259.98444"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="2392"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg2" />
+  <!--!Font Awesome Pro 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license (Commercial License) Copyright 2025 Fonticons, Inc.-->
+  <path
+     class="fa-secondary"
+     opacity="0.4"
+     d=""
+     id="path1"
+     style="display:inline" />
+  <path
+     class="fa-primary"
+     d="m 480.11328,58.059048 -5.65685,5.656855 -350.72497,350.724967 -5.65685,5.65685 -11.31371,-11.31371 5.65685,-5.65685 350.72497,-350.724966 5.65685,-5.656854 z m 90.50967,181.019332 -5.65686,5.65686 -260.21529,260.21529 -5.65686,5.65686 -11.3137,-11.31371 5.65685,-5.65685 260.2153,-260.2153 5.65685,-5.65685 z M 344.34878,58.059048 l -5.65686,5.656855 -214.96046,214.960457 -5.65685,5.65686 -11.31371,-11.31371 5.65685,-5.65685 214.96047,-214.960466 5.65685,-5.656854 z m 113.13708,158.391922 -5.65685,5.65685 -169.70563,169.70563 -5.65685,5.65685 -11.31371,-11.31371 5.65685,-5.65685 169.70563,-169.70563 5.65685,-5.65685 z M 208.58428,58.059048 l -5.65686,5.656855 -79.19596,79.195957 -5.65685,5.65686 -11.31371,-11.31371 5.65685,-5.65686 79.19596,-79.195956 5.65686,-5.656854 z M 118.07461,12.804214 112.41775,18.461069 78.476635,52.402194 72.819779,58.059048 61.506071,46.74534 67.162925,41.088486 101.10405,7.1473605 106.7609,1.4905065 Z m 407.2935,407.293506 -5.65685,5.65685 -33.94113,33.94113 -5.65685,5.65685 -11.31371,-11.3137 5.65686,-5.65686 33.94112,-33.94112 5.65686,-5.65686 z"
+     id="path2"
+     style="stroke-width:0.999992" />
+</svg>

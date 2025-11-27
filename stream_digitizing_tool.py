@@ -1,54 +1,222 @@
 
 from qgis.gui import QgsMapTool, QgsRubberBand
-from qgis.core import QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry
+from qgis.core import QgsWkbTypes, QgsPointXY, QgsFeature, QgsGeometry, QgsApplication, QgsProject, Qgis
 from PyQt5.QtCore import Qt
+from qgis.PyQt.QtGui import QColor
+
+from helper import update_feature_attributes, reproject_to_destination_crs
+
 
 class StreamDigitizingTool(QgsMapTool):
     def __init__(self, iface, layer, layer_type):
+        """Constructor
+
+        :param iface: QGIS interface
+        :type iface: QgsInterface
+
+        :param layer: QGIS layer, Point or Polygon
+        :type layer: QgsVectorLayer
+
+        :param layer_type: Type of layer, points/polygons
+        :type layer_type: str
+        """
         super().__init__(iface.mapCanvas())
+        self.number_of_items_to_update = 1
         self.iface = iface
         self.layer = layer
         self.layer_type = layer_type
         self.stream_points = []
+        self.pending_features = []
+        self.pending_polygon_features = []
+        self.polygon_rubber_bands = []
         self.digitizing = False
-        self.rubber_band = QgsRubberBand(self.canvas(),
-                                         QgsWkbTypes.LineGeometry if layer_type == 'line' else QgsWkbTypes.PolygonGeometry)
+        self.rubber_band = QgsRubberBand(self.iface.mapCanvas(),
+                                         QgsWkbTypes.PointGeometry if layer_type == 'points' else QgsWkbTypes.PolygonGeometry)
         self.rubber_band.setColor(Qt.red)
+        if layer_type == 'polygons':
+            self.rubber_band.setFillColor(QColor(255, 0, 0, 25))
         self.rubber_band.setWidth(2)
 
+
     def canvasPressEvent(self, event):
-        if event.button() == Qt.LeftButton:  # Stylus down
-            self.start_digitizing(event)
+        """Start a new line segment on stylus down
+
+        :param event: The mouse event object containing details about the button press interaction on the map canvas
+        :type event: QgsMapMouseEvent
+        """
+        if event.button() == Qt.LeftButton:
+            if self.layer_type == 'points':
+                self.add_point(event)
+            else:
+                self.start_digitizing(event)
+
 
     def canvasMoveEvent(self, event):
+        """Continue adding points to the current line
+
+        :param event: The mouse event object contains details about the movement interaction on the map canvas
+        :type event: QgsMapMouseEvent
+        """
         if self.digitizing:
             self.add_vertex(event)
 
+
     def canvasReleaseEvent(self, event):
-        if event.button() == Qt.LeftButton:  # Stylus up
+        """Store the completed line segment on stylus up
+
+        :param event: The mouse event object containing details about the mouse button release interaction on the map canvas
+        :type event: QgsMapMouseEvent
+        """
+        if event.button() == Qt.LeftButton and self.layer_type != 'points':
             self.finish_digitizing()
 
+
     def start_digitizing(self, event):
+        """Start digitizing a polygon.
+        To enable multi polygons, we need to start a new rubber band.
+
+        :param event: The mouse event object containing details about the button press interaction on the map canvas
+        :type event: QgsMapMouseEvent
+        """
         self.stream_points = [self.toMapCoordinates(event.pos())]
-        self.rubber_band.reset(QgsWkbTypes.LineGeometry if self.layer_type == 'line' else QgsWkbTypes.PolygonGeometry)
+        self.rubber_band = QgsRubberBand(self.iface.mapCanvas(),QgsWkbTypes.PolygonGeometry)
+        self.rubber_band.setColor(Qt.red)
+        self.rubber_band.setFillColor(QColor(255, 0, 0, 25))
+        self.rubber_band.setWidth(2)
         self.digitizing = True
 
+
     def add_vertex(self, event):
+        """Add a vertex to the rubber band.
+        This method is called continuously while the stylus is pressed and is moving across the map canvas.
+
+        :param event: The mouse event object contains details about the movement interaction on the map canvas
+        :type event: QgsMapMouseEvent
+        """
         point = self.toMapCoordinates(event.pos())
         self.stream_points.append(point)
         self.rubber_band.addPoint(point, True)
         self.rubber_band.show()
 
+
     def finish_digitizing(self):
+        """Finish digitizing a polygon."""
         if not self.stream_points:
             return
+
+        if self.stream_points[0] != self.stream_points[-1]:
+            self.stream_points.append(self.stream_points[0])
+
+        # Finalize the rubber band
+        for pt in self.stream_points:
+            self.rubber_band.addPoint(pt, False)
+        self.rubber_band.closePoints()
+        self.rubber_band.show()
+
+        # Store polygon and rubber band
+        self.pending_polygon_features.append(self.stream_points.copy())
+        self.polygon_rubber_bands.append(self.rubber_band)
+
+        # Reset for next polygon
+        self.stream_points = []
         self.digitizing = False
-        geom = QgsGeometry.fromPolylineXY(
-            self.stream_points) if self.layer_type == 'line' else QgsGeometry.fromPolygonXY([self.stream_points])
+
+
+    def populate_feature_for_polygon(self):
+        """Populates the pending polygon features.
+        Loop through all pending polygon features and convert them to a QgsFeature.
+        If the layer is in a different CRS, reproject the geometry.
+        """
+        for polygon_feature in self.pending_polygon_features:
+
+            geom = QgsGeometry.fromPolygonXY([polygon_feature])
+
+            canvas_crs = QgsProject.instance().crs()
+            layer_crs = self.layer.crs()
+
+            if canvas_crs != layer_crs:
+                geom = reproject_to_destination_crs(geom, canvas_crs, layer_crs)
+
+            feature = QgsFeature(self.layer.fields())
+            feature.setGeometry(geom)
+            self.pending_features.append(feature)
+
+
+    def add_point(self, event):
+        """Add a point to the rubber band.
+        If the canvas is in a different CRS compared to the layer, then reproject the point.
+
+        :param event: The mouse event object containing details about the button press interaction on the map canvas
+        :type event: QgsMapMouseEvent
+        """
+        point = self.toMapCoordinates(event.pos())
+        self.rubber_band.addPoint(point, True)
+        self.rubber_band.show()
+
+        canvas_crs = QgsProject.instance().crs()
+        layer_crs = self.layer.crs()
+        geom = QgsGeometry.fromPointXY(point)
+        if canvas_crs != layer_crs:
+            geom = reproject_to_destination_crs(geom, canvas_crs, layer_crs)
 
         feature = QgsFeature(self.layer.fields())
         feature.setGeometry(geom)
-        self.layer.startEditing()
-        self.layer.addFeature(feature)
+        self.pending_features.append(feature)
+
+
+    def features_to_save(self):
+        """Checks if there are any features to save.
+
+        :return: True if there are features to save, False otherwise.
+        """
+        if self.layer_type == 'points':
+            return len(self.pending_features) > 0
+        else:
+            return len(self.pending_polygon_features) > 0
+
+
+    def save_feature(self, attributes):
+        """Saves the drawn polygon or point to the layer.
+        Loop thorough pending features and add them to the layer.
+        Check if a feature has geometry. If not, log a warning message to the Message Bar.
+        Reset the arrays and rubber bands such that the drawn polygons/points are also not shown along with the saved features.
+
+        :param attributes: Dictionary of attributes to add to the feature.
+        :type attributes: dict
+        """
+        if self.layer_type != 'points':
+            self.populate_feature_for_polygon()
+        if not self.pending_features:
+            return
+        if not self.layer.isEditable():
+            self.layer.startEditing()
+
+        self.number_of_items_to_update = len(self.pending_features)
+        for feature in self.pending_features:
+            if feature.geometry() is None:
+                self.iface.messageBar().pushMessage("Warning", "Geometry is None.", level=Qgis.Warning, duration=5)
+                continue
+            self.layer.addFeature(update_feature_attributes(feature, self.layer_type, attributes))
+
+        self.pending_features = []
+        self.pending_polygon_features = []
+        for rubber_band in self.polygon_rubber_bands:
+            rubber_band.reset(QgsWkbTypes.PolygonGeometry)
+        self.polygon_rubber_bands = []
+        self.stream_points = []
         self.layer.commitChanges()
-        self.rubber_band.reset(QgsWkbTypes.LineGeometry if self.layer_type == 'line' else QgsWkbTypes.PolygonGeometry)
+        self.layer.startEditing()
+        self.rubber_band.reset(QgsWkbTypes.PolygonGeometry if self.layer_type == 'polygons' else QgsWkbTypes.PointGeometry)
+
+
+    def remove_feature(self):
+        """Remove the last unsaved feature from the list and reset the rubber band."""
+        if self.layer_type == 'points':
+            if len(self.pending_features) > 0:
+                self.pending_features.pop()
+                self.rubber_band.removeLastPoint()
+                self.rubber_band.show()
+        else:
+            if len(self.pending_polygon_features) > 0:
+                self.pending_polygon_features.pop()
+                self.polygon_rubber_bands.pop().reset(QgsWkbTypes.PolygonGeometry)
