@@ -61,6 +61,9 @@ class SelectExistingLayerDialog(QDialog, FORM_CLASS):
         self.setupUi(self)
         self.layer_groups = layer_groups
 
+        if not any(layer_groups.values()):
+            self.infoLabel.setVisible(True)
+
         add_items_to_combo_box(self.layer_groups['points'], self.pointsComboBox)
         add_items_to_combo_box(self.layer_groups['polygons'], self.polygonsComboBox)
         add_items_to_combo_box(self.layer_groups['lines'], self.linesComboBox)

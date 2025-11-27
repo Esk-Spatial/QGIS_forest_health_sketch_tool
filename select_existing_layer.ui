@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>466</width>
-    <height>175</height>
+    <width>705</width>
+    <height>235</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -284,6 +284,26 @@
        <widget class="QComboBox" name="linesComboBox"/>
       </item>
      </layout>
+    </widget>
+   </item>
+   <item row="0" column="0">
+    <widget class="QLabel" name="infoLabel">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="visible">
+      <bool>false</bool>
+     </property>
+     <property name="font">
+      <font>
+       <pointsize>14</pointsize>
+       <weight>75</weight>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>No sketch layers found. Layers created with an older version of the Sketch Tool may not be available.</string>
+     </property>
     </widget>
    </item>
   </layout>

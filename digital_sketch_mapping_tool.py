@@ -498,6 +498,7 @@ class DigitalSketchMappingTool:
 
         self.folder_location = folder
         self.folder_location_set = True
+        self.enable_log_to_file()
         if self.attributes['add_bing_imagery']:
             self.load_bing_maps()
         self.create_geopackage_file(self.attributes['project_name'])
@@ -858,6 +859,25 @@ class DigitalSketchMappingTool:
         self.open_settings(True)
 
 
+    def enable_log_to_file(self):
+        gps = self.iface.mainWindow().findChild(QWidget, 'QgsGpsInformationWidgetBase')
+        popup_btn = gps.findChild(QToolButton, "mBtnPopupOptions")
+
+        if not popup_btn:
+            return
+
+        btn_menu = popup_btn.menu()
+        log_to_file = next(
+            (action for action in btn_menu.findChildren(QAction)
+             if action.text() == 'Log to GeoPackage/Spatialite…'),
+            None
+        )
+
+        if log_to_file and not log_to_file.isChecked():
+            QgsApplication.messageLog().logMessage(f"log_to_file: {log_to_file.isChecked()}", "DigitalSketchPlugin")
+            log_to_file.setChecked(True)
+
+
     def change_gps_settings(self, start_digitizing):
         """Change the GPS settings based on if it's digitizing or not.
         If it is digitizing, then autorotation and centering are disabled.
@@ -1156,9 +1176,9 @@ class DigitalSketchMappingTool:
         if not self.geopackage_created:
             return
 
-        self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-points", f"{project_name}-sketch-points", "ogr")
-        self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-lines", f"{project_name}-sketch-lines", "ogr")
-        self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch-polygons", f"{project_name}-sketch-polygons", "ogr")
+        self.point_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch_points", f"{project_name}_sketch_points", "ogr")
+        self.line_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch_lines", f"{project_name}_sketch_lines", "ogr")
+        self.polygon_layer = QgsVectorLayer(f"{gpkg_file_name}|layername=sketch_polygons", f"{project_name}_sketch_polygons", "ogr")
         self.sketch_layers_set = True
         QgsProject.instance().addMapLayer(self.polygon_layer)
         QgsProject.instance().addMapLayer(self.line_layer)

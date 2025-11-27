@@ -44,9 +44,9 @@ def create_geopackage_file(path, iface, crs=None):
         spatial_ref.ImportFromProj4(crs)
 
         # Create layers
-        point_layer = gpkg_file.CreateLayer('sketch-points', srs=spatial_ref, geom_type=ogr.wkbPoint)
-        polygon_layer = gpkg_file.CreateLayer('sketch-polygons', srs=spatial_ref, geom_type=ogr.wkbPolygon)
-        line_layer = gpkg_file.CreateLayer('sketch-lines', srs=spatial_ref, geom_type=ogr.wkbMultiLineString)
+        point_layer = gpkg_file.CreateLayer('sketch_points', srs=spatial_ref, geom_type=ogr.wkbPoint)
+        polygon_layer = gpkg_file.CreateLayer('sketch_polygons', srs=spatial_ref, geom_type=ogr.wkbPolygon)
+        line_layer = gpkg_file.CreateLayer('sketch_lines', srs=spatial_ref, geom_type=ogr.wkbMultiLineString)
 
         for layer in [point_layer, polygon_layer, line_layer]:
             setup_layer_attr(layer)
@@ -76,8 +76,8 @@ def setup_layer_attr(layer):
     layer.CreateField(ogr.FieldDefn("LON", ogr.OFSTFloat32))
     layer.CreateField(ogr.FieldDefn("Surveyor", ogr.OFTString))
     layer.CreateField(ogr.FieldDefn("Type", ogr.OFTString))
-    layer.CreateField(ogr.FieldDefn("Date", ogr.OFTString))
-    layer.CreateField(ogr.FieldDefn("Time", ogr.OFTString))
+    layer.CreateField(ogr.FieldDefn("Date_", ogr.OFTString))
+    layer.CreateField(ogr.FieldDefn("Time_", ogr.OFTString))
 
 def get_closest_color_name(color):
     """Find the closest color name from the predefined QColor name
@@ -186,8 +186,8 @@ def update_feature_attributes(feature, layer_type, attributes):
     feature.setAttribute('LON', f"{lon}")
     feature.setAttribute('Surveyor', attributes['surveyor'])
     feature.setAttribute('Type', attributes['type_txt'])
-    feature.setAttribute('Date', get_current_date())
-    feature.setAttribute('Time', get_current_time())
+    feature.setAttribute('Date_', get_current_date())
+    feature.setAttribute('Time_', get_current_time())
 
     return feature
 
@@ -234,7 +234,7 @@ def get_existing_enabled_layers():
         if (layer_tree.findLayer(l_id) and
             layer_tree.findLayer(l_id).isVisible() and
             layer.__class__.__name__ == 'QgsVectorLayer') and
-           "sketch-" in layer.name()
+           "sketch_" in layer.name()
     }
 
     layer_groups = {
@@ -245,11 +245,11 @@ def get_existing_enabled_layers():
 
     for l_id, layer in enabled_layers.items():
         entry = {'name': layer.name(), 'layer': layer}
-        if 'sketch-points' in layer.name():
+        if 'sketch_points' in layer.name():
             layer_groups['points'].append(entry)
-        elif 'sketch-polygons' in layer.name():
+        elif 'sketch_polygons' in layer.name():
             layer_groups['polygons'].append(entry)
-        elif 'sketch-lines' in layer.name():
+        elif 'sketch_lines' in layer.name():
             layer_groups['lines'].append(entry)
 
     return layer_groups
@@ -266,7 +266,7 @@ def get_existing_layers():
         for l_id, layer in existing_layers.items()
         if (layer_tree.findLayer(l_id) and
             layer.__class__.__name__ == 'QgsVectorLayer') and
-           "sketch-" in layer.name()
+           "sketch_" in layer.name()
     }
 
     return enabled_layers
